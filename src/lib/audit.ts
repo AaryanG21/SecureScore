@@ -65,6 +65,12 @@ export type AuditAction =
 
 export interface AuditEntry {
   actorUserId?: string | null;
+  /**
+   * Optional. When omitted and an actorUserId is given, it is looked up
+   * once here so the log records who the actor was AT THE TIME — see the
+   * note on AuditLog.actorEmail in the schema.
+   */
+  actorEmail?: string | null;
   action: AuditAction;
   targetType: string;
   targetId?: string | null;
@@ -123,9 +129,22 @@ export function redactMetadata(
 
 export async function writeAudit(entry: AuditEntry): Promise<void> {
   try {
+    // Attribution is denormalized onto the row because the audit log holds
+    // no foreign key to User — the account may be deleted later, and the
+    // record of what it did has to survive that.
+    let actorEmail = entry.actorEmail ?? null;
+    if (!actorEmail && entry.actorUserId) {
+      const actor = await prisma.user.findUnique({
+        where: { id: entry.actorUserId },
+        select: { email: true },
+      });
+      actorEmail = actor?.email ?? null;
+    }
+
     await prisma.auditLog.create({
       data: {
         actorUserId: entry.actorUserId ?? null,
+        actorEmail,
         action: entry.action,
         targetType: entry.targetType,
         targetId: entry.targetId ?? null,

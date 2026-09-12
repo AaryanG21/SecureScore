@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
       userAgent: true,
       metadata: true,
       createdAt: true,
-      actor: { select: { id: true, email: true } },
+      actorUserId: true,
+      actorEmail: true,
     },
   });
 

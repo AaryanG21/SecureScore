@@ -370,6 +370,15 @@ refusal / injection test case.
   `DELETE`, and `TRUNCATE` on the table, not merely by application
   convention.
 
+  The audit log holds **no foreign key** to `User`. An append-only table
+  cannot have a relation to a mutable one: `ON DELETE SET NULL` would
+  mutate the log (blocked by the trigger, making accounts undeletable),
+  and `CASCADE` would erase precisely the history that matters most when
+  an account is removed. `actorUserId` is an opaque string that outlives
+  the account, and `actorEmail` is denormalized at write time — the email
+  as it was when the action happened is the forensic fact, where a join
+  would show whatever that account is called today, or nothing at all.
+
 ### Dependency hygiene
 
 Run `npm audit` before each release, and enable Dependabot (or Renovate) on

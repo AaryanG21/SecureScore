@@ -82,7 +82,7 @@ model User {
   scans         ScanResult[]
   refreshTokens RefreshToken[]
   backupCodes   BackupCode[]
-  auditLogs     AuditLog[]     @relation("AuditActor")
+  // No AuditLog relation by design — see the comment on AuditLog.actorUserId.
 
   @@index([status])
   @@index([role])
@@ -186,7 +186,19 @@ model AuditLog {
 
   // Null for pre-authentication events (e.g. failed login for an
   // address that does not resolve to an account).
+  //
+  // Deliberately NOT a foreign key. An append-only log cannot hold a
+  // relation to a mutable table: `onDelete: SetNull` would issue an UPDATE
+  // against this table (blocked by the immutability trigger, making users
+  // undeletable), and `Cascade` would erase the very history that matters
+  // most when an account is removed. The id is kept as an opaque string
+  // that outlives the account.
   actorUserId String?
+  // The actor's email AS IT WAS when the action happened. Denormalized on
+  // purpose: that is the forensic fact. Reading it back through a join
+  // would show whatever the account is called now, or nothing at all if it
+  // has since been deleted.
+  actorEmail String?
   action      String
   targetType  String
   targetId    String?
@@ -198,8 +210,6 @@ model AuditLog {
   metadata Json?
 
   createdAt DateTime @default(now())
-
-  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])

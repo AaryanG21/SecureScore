@@ -60,7 +60,7 @@ export default async function AdminPage() {
         targetId: true,
         ipAddress: true,
         createdAt: true,
-        actor: { select: { email: true } },
+        actorEmail: true,
       },
     }),
     Promise.all([
@@ -124,7 +124,7 @@ export default async function AdminPage() {
                       {entry.createdAt.toISOString().slice(0, 19).replace("T", " ")}
                     </td>
                     <td className="py-2 font-mono text-ink-muted">
-                      {entry.actor?.email ?? "—"}
+                      {entry.actorEmail ?? "—"}
                     </td>
                     <td className="py-2 font-mono text-ink">{entry.action}</td>
                     <td className="py-2 text-ink-muted">
