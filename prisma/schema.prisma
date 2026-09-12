@@ -1,0 +1,257 @@
+// Fulcrum — Website Security Scorecard & Remediation Agent
+// Postgres + Prisma. All access goes through the Prisma query builder
+// (parameterized); there is no raw SQL string concatenation anywhere in src/.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 keeps the connection URL out of the schema entirely: Migrate
+// reads it from prisma.config.ts and the runtime client gets it through
+// the pg driver adapter in src/lib/db.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  // Registered, password set, but TOTP enrollment not yet completed.
+  // Cannot hold a full session in this state.
+  PENDING_2FA
+  ACTIVE
+  SUSPENDED
+}
+
+enum DomainVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REVOKED
+}
+
+enum DomainVerificationMethod {
+  DNS_TXT
+  HTTP_WELL_KNOWN
+}
+
+enum ScanStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  REFUSED
+}
+
+model User {
+  id String @id @default(cuid())
+
+  email        String @unique
+  // argon2id hash. Never a reversible encryption of the password.
+  passwordHash String
+
+  role   Role       @default(USER)
+  status UserStatus @default(PENDING_2FA)
+
+  // TOTP shared secret, encrypted at rest with AES-256-GCM using
+  // TOTP_ENCRYPTION_KEY. Never stored in plaintext, never logged.
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean   @default(false)
+  twoFactorEnrolledAt DateTime?
+  // Highest RFC 6238 time step already spent by this user. Codes at or
+  // below it are rejected, which stops replay of an observed code inside
+  // its validity window — durably, and across app instances.
+  twoFactorLastTimeStep Int?
+
+  // Account lockout state (see lib/auth/lockout.ts).
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lockedReason     String?
+
+  passwordChangedAt DateTime @default(now())
+  lastLoginAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domains       Domain[]
+  scans         ScanResult[]
+  refreshTokens RefreshToken[]
+  backupCodes   BackupCode[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@index([status])
+  @@index([role])
+}
+
+// One-time recovery codes issued at 2FA enrollment. Stored hashed
+// (argon2id) exactly like passwords — the plaintext is shown to the
+// user once and never again.
+model BackupCode {
+  id       String    @id @default(cuid())
+  userId   String
+  codeHash String
+  usedAt   DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// The authorization allowlist. A scan is only ever permitted against a
+// Domain row owned by the requesting user with status VERIFIED.
+model Domain {
+  id     String @id @default(cuid())
+  userId String
+
+  // Normalized lowercase registrable hostname, punycode/IDNA-encoded.
+  hostname String
+
+  verificationStatus DomainVerificationStatus @default(PENDING)
+  verificationMethod DomainVerificationMethod @default(DNS_TXT)
+  // Random challenge value the user must publish. Not a secret that
+  // grants access by itself, but rotated on every re-verification.
+  verificationToken  String
+  verifiedAt         DateTime?
+  revokedAt          DateTime?
+  revokedByUserId    String?
+  lastCheckedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans ScanResult[]
+
+  // A hostname may be claimed by at most one user.
+  @@unique([hostname])
+  @@index([userId])
+  @@index([verificationStatus])
+}
+
+model ScanResult {
+  id       String @id @default(cuid())
+  domainId String
+  userId   String
+
+  status ScanStatus @default(QUEUED)
+
+  // Normalized Finding[] produced by the agent. Untrusted scanned text
+  // lives inside these objects and is only ever rendered as data.
+  findings Json @default("[]")
+
+  // Composite risk score 0-100 and the derived A-F grade.
+  score Int?
+  grade String?
+
+  // Effort budget the user set for this run, and what the ranked plan
+  // actually consumed.
+  budgetLimit Int
+  budgetUsed  Int @default(0)
+
+  // Ranked remediation steps with the agent's stated reasoning.
+  remediationPlan Json @default("[]")
+
+  // Checks that did not complete, with why. Persisted rather than derived:
+  // the scorecard has to be able to say "TLS posture is unknown" instead of
+  // implying a clean result, and that is only honest if the record survives.
+  degradedSteps Json @default("[]")
+
+  // Provenance for the pinned external tool.
+  testsslVersion String?
+  refusalReason  String?
+  errorMessage   String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Append-only. The initial migration installs a Postgres trigger that
+// rejects UPDATE and DELETE on this table, so immutability is enforced
+// by the database rather than by convention.
+model AuditLog {
+  id String @id @default(cuid())
+
+  // Null for pre-authentication events (e.g. failed login for an
+  // address that does not resolve to an account).
+  actorUserId String?
+  action      String
+  targetType  String
+  targetId    String?
+
+  ipAddress String?
+  userAgent String?
+  // Structured context. Never contains passwords, TOTP secrets, or
+  // full tokens — see lib/audit.ts for the redaction rules.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+}
+
+model RefreshToken {
+  id     String @id @default(cuid())
+  userId String
+
+  // SHA-256 of the opaque token. The raw token only ever exists in the
+  // httpOnly cookie.
+  tokenHash String @unique
+
+  // Rotation family: reuse of an already-rotated token revokes the
+  // entire family (stolen-token detection).
+  familyId     String
+  replacedById String?
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  revokedReason String?
+
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+// Drives per-account + per-IP rate limiting and the user-visible login
+// history. Stores no credential material.
+model LoginAttempt {
+  id String @id @default(cuid())
+
+  email     String
+  userId    String?
+  ipAddress String?
+  userAgent String?
+
+  // PASSWORD | TOTP | BACKUP_CODE | REFRESH | REAUTH
+  stage   String
+  success Boolean
+  reason  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
+}

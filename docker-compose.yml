@@ -1,0 +1,89 @@
+# Local development and single-host deployment.
+#
+# Postgres is not published to the host network by default: only the app
+# container can reach it. Uncomment the ports block if you need psql from
+# the host, and remember to undo that before deploying.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fulcrum}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-fulcrum}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # ports:
+    #   - "127.0.0.1:5432:5432"   # host access for psql, local only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fulcrum}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fulcrum}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fulcrum}?schema=public
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      APP_NAME: ${APP_NAME:-Fulcrum}
+      TESTSSL_PATH: /app/vendor/testssl.sh/testssl.sh
+      TESTSSL_TIMEOUT_MS: ${TESTSSL_TIMEOUT_MS:-300000}
+      # Set to "true" only when the reverse proxy in front of this
+      # container is one you control and it sets X-Forwarded-For.
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+    ports:
+      # Bound to loopback: put a reverse proxy (Caddy, nginx, Cloudflare
+      # Tunnel) in front rather than exposing the app directly.
+      - "127.0.0.1:3000:3000"
+    # Defence in depth at the container boundary.
+    read_only: true
+    tmpfs:
+      # testssl.sh writes its JSON output here.
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - internal
+      - egress
+
+  # One-shot migration runner. Run explicitly:
+  #   docker compose run --rm migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fulcrum}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fulcrum}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    networks:
+      - internal
+
+volumes:
+  db-data:
+
+networks:
+  internal:
+    # No outbound route: the database sits on an isolated network.
+    internal: true
+  egress:
+    # The app needs outbound access for DNS challenges and TLS scanning.
+    driver: bridge

@@ -1,0 +1,19 @@
+node_modules
+.next
+.git
+.github
+npm-debug.log*
+
+# Never let a real environment file into the build context — it would end up
+# in an image layer even if a later stage deleted it.
+.env
+.env.*
+!.env.example
+
+tests
+coverage
+*.md
+!README.md
+.vscode
+.idea
+.DS_Store

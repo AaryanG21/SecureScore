@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma client is generated at build time (npm run build runs prisma generate)
+/src/generated
+
+# Scan artifacts — testssl.sh JSON output should never be committed
+/tmp
+*.jsonfile
+/scan-output
+
+# The .env.example template IS committed; real env files are not.
+!.env.example
