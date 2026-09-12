@@ -20,10 +20,28 @@ interface ScannableDomain {
  */
 export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
   const router = useRouter();
-  const [domainId, setDomainId] = useState(domains[0]?.id ?? "");
   const [budget, setBudget] = useState(15);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The selection is DERIVED, not stored, and that is load-bearing.
+  //
+  // `useState(domains[0]?.id)` would capture the list as it was on first
+  // mount. This panel first renders with zero verified domains, so the
+  // stored id would be "" — and it would stay "" after a domain was
+  // verified and the props updated, because a useState initializer runs
+  // once. A controlled <select> whose value matches no option still
+  // displays the first one, so the form looked correct while posting an
+  // empty domainId.
+  //
+  // Holding only an explicit user choice, and falling back to the first
+  // available domain, means the rendered value and the submitted value
+  // cannot drift apart.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const domainId =
+    chosenId && domains.some((d) => d.id === chosenId)
+      ? chosenId
+      : (domains[0]?.id ?? "");
 
   async function launch(event: React.FormEvent) {
     event.preventDefault();
@@ -38,7 +56,15 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
     setBusy(false);
 
     if (!result.ok) {
-      setError(result.error.message);
+      // Surface the specific field error when the server sent one; the
+      // generic message alone ("Check the scan parameters.") gives the user
+      // nothing to act on.
+      const fieldError = result.error.details
+        ? Object.entries(result.error.details)
+            .map(([field, messages]) => `${field}: ${messages.join(", ")}`)
+            .join(" · ")
+        : null;
+      setError(fieldError ? `${result.error.message} (${fieldError})` : result.error.message);
       return;
     }
 
@@ -68,7 +94,7 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
             <select
               className={inputClass}
               value={domainId}
-              onChange={(e) => setDomainId(e.target.value)}
+              onChange={(e) => setChosenId(e.target.value)}
               required
             >
               {domains.map((domain) => (
