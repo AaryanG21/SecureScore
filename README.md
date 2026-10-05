@@ -74,6 +74,42 @@ A step that fails is recorded in `degradedSteps` and shown on the
 scorecard. **A TLS scan that times out never looks like a clean one** — the
 scorecard says the TLS posture is unknown, not verified.
 
+### How the score becomes a letter
+
+The score is a penalty total: the worst finding counts in full, each
+subsequent one counts for less (`risk / (index + 1)`). That ranks well, but
+on its own it made the letter useless for comparison. A static site whose
+only real problem was a missing `Content-Security-Policy` scored 54 and
+graded **F** — one HIGH finding at risk 34 was three quarters of the total
+penalty, and no site without a critical finding could reach above D.
+
+F has to mean something. A scorecard that cannot tell "no CSP header" apart
+from "exploitable TLS and a known-exploited CVE" is not being strict, it is
+being uninformative — and the first operator who reads an F for a missing
+header learns to discount every F after it.
+
+So the letter is bounded below by the worst severity actually found:
+
+| Worst finding | Cannot grade below |
+| ------------- | ------------------ |
+| CRITICAL      | — (F is reachable) |
+| HIGH          | D                  |
+| MEDIUM        | C                  |
+| LOW           | B                  |
+| nothing scored| A                  |
+
+This is a **floor, never a ceiling**. Twenty HIGH findings still land at D
+rather than being lifted — the score keeps doing the discriminating, and
+accumulating problems still costs you.
+
+The implementation keeps the injection-resistance property intact.
+`computeGrade(score)` is unchanged and still takes exactly one argument;
+the floor lives in `computeGradeWithFloor(score, worstSeverity)`, whose
+second argument is one of five values from our own closed enum — set by our
+own rules, or by `mapExternalSeverity`, which maps an unrecognized label
+from testssl.sh to MEDIUM rather than trusting it. No target-supplied text
+reaches either function.
+
 ### Why scanned text cannot change a score
 
 The `Finding` type separates the two categories of data structurally.

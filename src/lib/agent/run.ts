@@ -6,7 +6,11 @@ import { fingerprint, fingerprintFindings } from "@/lib/agent/fingerprint";
 import { cveFindings, matchCves } from "@/lib/agent/cve";
 import { mapTestsslRecords, runTestssl } from "@/lib/agent/testssl";
 import { buildRemediationPlan } from "@/lib/agent/plan";
-import { computeGrade, computeOverallScore } from "@/lib/agent/scoring";
+import {
+  computeGradeWithFloor,
+  computeOverallScore,
+  worstSeverity,
+} from "@/lib/agent/scoring";
 import { MAX_TOTAL_EVIDENCE_LENGTH } from "@/lib/agent/sanitize";
 import type { Finding, ScanOutcome } from "@/lib/agent/types";
 
@@ -105,7 +109,10 @@ export async function runScan(request: ScanRequest): Promise<ScanRun> {
   const bounded = capTotalEvidence(dedupeFindings(findings));
 
   const score = computeOverallScore(bounded);
-  const grade = computeGrade(score);
+  // The letter is bounded by the worst severity actually found, so a site
+  // whose only real problem is a missing header cannot be graded the same
+  // as one with an exploitable critical. The score is unchanged.
+  const grade = computeGradeWithFloor(score, worstSeverity(bounded));
   const plan = buildRemediationPlan(bounded, { budgetLimit: request.budgetLimit });
 
   return {

@@ -1,5 +1,5 @@
 import { Badge, Panel } from "@/components/ui";
-import { severityBreakdown } from "@/lib/agent/scoring";
+import { severityBreakdown, worstSeverity } from "@/lib/agent/scoring";
 import { CVE_COVERAGE_NOTE } from "@/lib/agent/cve-dataset";
 import type { Finding, Grade, RemediationPlan, Severity } from "@/lib/agent/types";
 
@@ -19,6 +19,21 @@ const GRADE_TONE: Record<Grade, string> = {
   C: "text-sev-medium border-sev-medium/50 bg-sev-medium/10",
   D: "text-sev-high border-sev-high/50 bg-sev-high/10",
   F: "text-sev-critical border-sev-critical/50 bg-sev-critical/10",
+};
+
+/**
+ * Mirrors SEVERITY_FLOOR in lib/agent/scoring.ts, for display only.
+ *
+ * The scorecard explains the floor because a grade nobody can account for
+ * is a grade nobody trusts: "D, with nine findings and nothing critical"
+ * is a defensible statement, and "D" on its own is not.
+ */
+const SEVERITY_FLOOR_LABEL: Record<Severity, string> = {
+  CRITICAL: "F",
+  HIGH: "D",
+  MEDIUM: "C",
+  LOW: "B",
+  INFO: "A",
 };
 
 const SEVERITY_TONE = {
@@ -52,6 +67,7 @@ export function Scorecard({
   const scored = findings.filter((f) => f.severity !== "INFO");
   const informational = findings.filter((f) => f.severity === "INFO");
   const injectionCount = findings.filter((f) => f.injectionAttempt).length;
+  const worst = worstSeverity(findings);
 
   return (
     <div className="space-y-6">
@@ -84,13 +100,31 @@ export function Scorecard({
           </div>
         </div>
 
-        <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-ink-faint">
-          This grade reflects the checks Fulcrum ran against what is reachable
-          from outside: HTTP response headers, TLS configuration, and
-          self-reported software versions. It does not assess application
-          logic, dependencies, infrastructure, or access control. A good grade
-          means these checks found nothing — not that the site is secure.
-        </p>
+        <div className="mt-5 space-y-3 border-t border-line pt-4 text-xs leading-relaxed text-ink-faint">
+          {worst && (
+            <p>
+              The score is a penalty total: the worst finding counts in full
+              and each subsequent one counts for less. The letter is then
+              held to what was actually found — with nothing above{" "}
+              <span className="text-ink-muted">{worst.toLowerCase()}</span>{" "}
+              severity here, this cannot grade below{" "}
+              <span className="font-mono text-ink-muted">
+                {SEVERITY_FLOOR_LABEL[worst]}
+              </span>
+              , however many findings accumulate. An F is reserved for a
+              critical one.
+            </p>
+          )}
+
+          <p>
+            This grade reflects the checks Fulcrum ran against what is
+            reachable from outside: HTTP response headers, TLS configuration,
+            and self-reported software versions. It does not assess
+            application logic, dependencies, infrastructure, or access
+            control. A good grade means these checks found nothing — not that
+            the site is secure.
+          </p>
+        </div>
       </section>
 
       {/* -- degraded steps ------------------------------------------ */}

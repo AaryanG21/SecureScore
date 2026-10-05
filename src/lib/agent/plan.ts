@@ -1,4 +1,8 @@
-import { computeGrade, computeOverallScore } from "@/lib/agent/scoring";
+import {
+  computeGradeWithFloor,
+  computeOverallScore,
+  worstSeverity,
+} from "@/lib/agent/scoring";
 import type {
   Finding,
   RemediationPlan,
@@ -127,6 +131,9 @@ export function buildRemediationPlan(
   // Projected posture once every included step is done.
   const residual = findings.filter((f) => !fixedCheckIds.has(f.checkId));
   const projectedScore = computeOverallScore(residual);
+  // Projected against what would REMAIN, so completing the plan can lift
+  // the floor as well as the score — which is the honest projection.
+  const projectedWorst = worstSeverity(residual);
 
   return {
     budgetLimit,
@@ -134,7 +141,7 @@ export function buildRemediationPlan(
     steps,
     deferred,
     projectedScore,
-    projectedGrade: computeGrade(projectedScore),
+    projectedGrade: computeGradeWithFloor(projectedScore, projectedWorst),
     strategy: describeStrategy(steps.length, deferred.length, budgetLimit, budgetUsed),
   };
 }
