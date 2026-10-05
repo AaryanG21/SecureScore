@@ -132,6 +132,10 @@ model Domain {
   @@unique([hostname])
   @@index([userId])
   @@index([verificationStatus])
+  // authorizeScan filters on owner AND status together, and it is the most
+  // security-critical query in the app. Two single-column indexes made
+  // Postgres choose one and filter the rest; this is the access pattern.
+  @@index([userId, verificationStatus])
 }
 
 model ScanResult {
@@ -176,6 +180,9 @@ model ScanResult {
 
   @@index([domainId, createdAt])
   @@index([userId, createdAt])
+  // For the stalled-scan reaper, which looks for RUNNING rows older than
+  // a threshold. Without it that is a sequential scan on every boot.
+  @@index([status, startedAt])
 }
 
 // Append-only. The initial migration installs a Postgres trigger that

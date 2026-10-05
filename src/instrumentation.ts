@@ -19,4 +19,23 @@ export async function register(): Promise<void> {
   // Throws with every offending variable named — and no values, so this is
   // safe to let crash into a log.
   getEnv();
+
+  // Reconcile scans the previous process left RUNNING.
+  //
+  // A restart is precisely when rows get stranded, so this is the right
+  // moment to clear them. It must not be able to prevent startup: a
+  // database that is not reachable yet is a reason to come up and serve
+  // the readiness probe a failure, not a reason to crash-loop.
+  const { reapStalledScans } = await import("@/lib/agent/reaper");
+  try {
+    const reaped = await reapStalledScans();
+    if (reaped > 0) {
+      console.warn(`[startup] marked ${reaped} stalled scan(s) as failed`);
+    }
+  } catch (error) {
+    console.error(
+      "[startup] could not reconcile stalled scans",
+      error instanceof Error ? error.message : "unknown",
+    );
+  }
 }
