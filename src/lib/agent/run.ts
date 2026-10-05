@@ -1,4 +1,5 @@
 import "server-only";
+import { errorMessage, log } from "@/lib/log";
 import { normalizeHostname } from "@/lib/validation/hostname";
 import { probeHeaders, evaluateHeaders } from "@/lib/agent/headers";
 import { fingerprint, fingerprintFindings } from "@/lib/agent/fingerprint";
@@ -147,10 +148,9 @@ async function stepHeaders(
     // the server log, not into the scan record: a raw Node or TLS error
     // string is persisted, rendered on the scorecard and returned over the
     // API, and it describes our internals rather than the target's posture.
-    console.error(
-      "[scan] unexpected failure in the header step",
-      error instanceof Error ? error.message : "unknown",
-    );
+    log.error("unexpected failure in the scan header step", {
+      error: errorMessage(error),
+    });
 
     return {
       findings: [],

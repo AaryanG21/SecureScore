@@ -1,3 +1,5 @@
+import { errorMessage, log } from "@/lib/log";
+
 /**
  * Startup checks.
  *
@@ -14,6 +16,13 @@
  * refuses to boot.
  */
 export async function register(): Promise<void> {
+  // register() is invoked for every runtime Next builds, including Edge.
+  // Everything below needs Node — the env schema uses Buffer, and the
+  // reaper reaches Prisma — so without this guard the Edge bundle pulls
+  // in node:path and the Prisma client and the build fills with
+  // "not supported in the Edge Runtime" warnings.
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
   const { getEnv } = await import("@/lib/env");
 
   // Throws with every offending variable named — and no values, so this is
@@ -30,12 +39,11 @@ export async function register(): Promise<void> {
   try {
     const reaped = await reapStalledScans();
     if (reaped > 0) {
-      console.warn(`[startup] marked ${reaped} stalled scan(s) as failed`);
+      log.warn("marked stalled scans as failed at startup", { count: reaped });
     }
   } catch (error) {
-    console.error(
-      "[startup] could not reconcile stalled scans",
-      error instanceof Error ? error.message : "unknown",
-    );
+    log.error("could not reconcile stalled scans at startup", {
+      error: errorMessage(error),
+    });
   }
 }

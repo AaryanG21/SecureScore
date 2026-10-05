@@ -1,4 +1,5 @@
 import "server-only";
+import { errorMessage, log } from "@/lib/log";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -104,6 +105,15 @@ export interface AuditEntry {
   targetId?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /**
+   * Correlation id from src/proxy.ts, folded into metadata on write.
+   *
+   * It is what lets an audit row be matched to the reverse proxy's access
+   * log line and to any operational log lines from the same request —
+   * answering "what else happened while this was denied" without guessing
+   * from timestamps.
+   */
+  requestId?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -154,6 +164,17 @@ function redactString(value: string): string {
   return value.length > MAX_VALUE_LENGTH
     ? `${value.slice(0, MAX_VALUE_LENGTH)}…[truncated]`
     : value;
+}
+
+/**
+ * Merges the correlation id into the metadata object that gets redacted.
+ *
+ * Done here rather than at every call site: there are three dozen
+ * writeAudit calls and the one that forgets is the one investigated later.
+ */
+function withRequestId(entry: AuditEntry): Record<string, unknown> | null {
+  if (!entry.requestId) return entry.metadata ?? null;
+  return { ...(entry.metadata ?? {}), requestId: entry.requestId };
 }
 
 /**
@@ -221,7 +242,7 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
         targetId: entry.targetId ?? null,
         ipAddress: entry.ipAddress ?? null,
         userAgent: entry.userAgent?.slice(0, 300) ?? null,
-        metadata: (redactMetadata(entry.metadata) ?? undefined) as
+        metadata: (redactMetadata(withRequestId(entry)) ?? undefined) as
           | Prisma.InputJsonValue
           | undefined,
       },
@@ -229,9 +250,10 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
   } catch (error) {
     // Never rethrow: an auth denial must still be returned to the client
     // even if the audit insert failed. But make the failure visible.
-    console.error("[audit] failed to persist entry", {
+    log.error("audit entry could not be persisted", {
       action: entry.action,
-      error: error instanceof Error ? error.message : "unknown",
+      requestId: entry.requestId,
+      error: errorMessage(error),
     });
   }
 }

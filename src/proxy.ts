@@ -42,7 +42,21 @@ export function proxy(request: NextRequest) {
   // Strip any client-supplied spoof of headers we generate ourselves.
   requestHeaders.delete("x-fulcrum-user");
 
+  // Correlation id, generated here and never accepted from the client.
+  //
+  // Taking an inbound x-request-id would let a caller choose the key that
+  // its own log lines and audit rows are filed under — which means
+  // colliding with someone else's requests, or splitting its own into
+  // unrelated ids to make a pattern hard to see. It is set on both the
+  // request (so handlers and audit rows can use it) and the response (so
+  // it can be quoted in a support conversation), and the reverse proxy in
+  // front of this app should log it alongside method, path and status.
+  requestHeaders.delete("x-request-id");
+  const requestId = crypto.randomUUID();
+  requestHeaders.set("x-request-id", requestId);
+
   const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("x-request-id", requestId);
 
   for (const [key, value] of Object.entries(
     securityHeaders({ nonce, isDev, isHttps }),

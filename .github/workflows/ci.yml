@@ -44,11 +44,14 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://fulcrum:fulcrum@localhost:5432/fulcrum_test?schema=public
-      # Build- and test-time only, and they are not secrets: they exist so
-      # the env schema is satisfied, exactly as the Dockerfile does it.
-      # Both decode to 32 bytes, which is what the schema requires.
-      JWT_SIGNING_KEY: Y2ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldA==
-      TOTP_ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldA==
+      # Build- and test-time only, and not secrets: they exist so the env
+      # schema is satisfied, exactly as the Dockerfile does it. Both decode
+      # to the literal text "ci-placeholder-not-a-real-secret", which is
+      # exactly 32 bytes — the length the schema requires. The first
+      # version of this was 31 bytes and failed the build, which is
+      # precisely the kind of thing CI is for.
+      JWT_SIGNING_KEY: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1zZWNyZXQ=
+      TOTP_ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1zZWNyZXQ=
       APP_ORIGIN: http://localhost:3000
       NEXT_TELEMETRY_DISABLED: "1"
 

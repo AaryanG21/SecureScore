@@ -48,6 +48,7 @@ services:
       # of that) or the app refuses to start. See .env.example.
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       # Bound to loopback: put a reverse proxy (Caddy, nginx, Cloudflare
       # Tunnel) in front rather than exposing the app directly.

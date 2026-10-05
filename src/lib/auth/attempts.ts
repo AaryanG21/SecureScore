@@ -1,4 +1,5 @@
 import "server-only";
+import { errorMessage, log } from "@/lib/log";
 import { prisma } from "@/lib/db";
 
 /**
@@ -33,9 +34,9 @@ export async function recordAttempt(args: {
       },
     });
   } catch (error) {
-    console.error("[attempts] failed to record", {
+    log.error("login attempt could not be recorded", {
       stage: args.stage,
-      error: error instanceof Error ? error.message : "unknown",
+      error: errorMessage(error),
     });
   }
 }

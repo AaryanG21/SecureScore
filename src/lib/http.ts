@@ -10,6 +10,8 @@ import { getEnv } from "@/lib/env";
 export interface RequestMeta {
   ipAddress: string | null;
   userAgent: string | null;
+  /** Minted in src/proxy.ts; null when a request bypassed it. */
+  requestId: string | null;
 }
 
 /**
@@ -82,6 +84,7 @@ export function getRequestMeta(request: Request): RequestMeta {
   return {
     ipAddress: getClientIp(request),
     userAgent: request.headers.get("user-agent"),
+    requestId: request.headers.get("x-request-id"),
   };
 }
 
