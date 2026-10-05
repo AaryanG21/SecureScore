@@ -3,7 +3,7 @@ import type { NextResponse } from "next/server";
 import { getSession, type SessionUser } from "@/lib/auth/session";
 import { verifyCsrf } from "@/lib/security/csrf";
 import { verifyReauthToken } from "@/lib/auth/tokens";
-import { REAUTH_COOKIE, readCookie } from "@/lib/auth/cookies";
+import { REAUTH_COOKIE, clearAuthCookie, readCookie } from "@/lib/auth/cookies";
 import { checkRateLimit, type RateLimitName } from "@/lib/security/rate-limit";
 import { apiError, apiRateLimited, getRequestMeta } from "@/lib/http";
 import { writeAudit } from "@/lib/audit";
@@ -147,6 +147,24 @@ export async function requireAdminWithReauth(
       ),
     };
   }
+
+  // Spend the step-up. One confirmation authorises one action.
+  //
+  // Previously the cookie survived for its full lifetime, so a single
+  // password+TOTP confirmation silently authorised every destructive admin
+  // action taken in the next five minutes. That is the opposite of what
+  // step-up authentication is for: the point is to tie an explicit
+  // confirmation to a specific consequential act, and a reusable token
+  // turns it back into an ambient privilege. The admin console already
+  // prompts before each action, so clearing it here costs nothing and
+  // closes the gap for any other caller.
+  //
+  // Note the limit of this: the token is a stateless JWT, so clearing the
+  // cookie is what prevents reuse. It is httpOnly and SameSite=strict, but
+  // an attacker who had already exfiltrated the value could still present
+  // it until it expires. Binding a one-time id in the database would close
+  // that too, at the cost of a write on every admin action.
+  await clearAuthCookie(REAUTH_COOKIE);
 
   return result;
 }

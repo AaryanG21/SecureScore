@@ -73,23 +73,30 @@ async function issueTokenPair(args: {
   const refreshToken = randomToken(32);
   const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_SECONDS * 1000);
 
-  const created = await prisma.refreshToken.create({
-    data: {
-      userId: args.userId,
-      tokenHash: sha256(refreshToken),
-      familyId: args.familyId,
-      expiresAt,
-      ipAddress: args.ctx.ipAddress ?? null,
-      userAgent: args.ctx.userAgent ?? null,
-    },
-  });
-
-  if (args.replacesId) {
-    await prisma.refreshToken.update({
-      where: { id: args.replacesId },
-      data: { replacedById: created.id },
+  // One transaction, because a half-finished rotation is a security
+  // problem and not merely an inconsistency: if the new row were created
+  // and the old row's replacedById never written, a replay of the old
+  // token would not be recognised as reuse and the family would survive.
+  await prisma.$transaction(async (tx) => {
+    const created = await tx.refreshToken.create({
+      data: {
+        userId: args.userId,
+        tokenHash: sha256(refreshToken),
+        familyId: args.familyId,
+        expiresAt,
+        ipAddress: args.ctx.ipAddress ?? null,
+        userAgent: args.ctx.userAgent ?? null,
+      },
+      select: { id: true },
     });
-  }
+
+    if (args.replacesId) {
+      await tx.refreshToken.update({
+        where: { id: args.replacesId },
+        data: { replacedById: created.id },
+      });
+    }
+  });
 
   const accessToken = await signAccessToken({
     userId: args.userId,
@@ -178,27 +185,43 @@ export async function rotateSession(
   if (!record) return { ok: false, reason: "invalid" };
 
   if (record.replacedById) {
-    await revokeFamily(record.familyId, "REFRESH_TOKEN_REUSE_DETECTED");
-    await clearAllAuthCookies();
-    await writeAudit({
-      actorUserId: record.userId,
-      action: "REFRESH_TOKEN_REUSE_DETECTED",
-      targetType: "RefreshTokenFamily",
-      targetId: record.familyId,
-      ipAddress: ctx.ipAddress,
-      userAgent: ctx.userAgent,
-    });
+    await handleReuse(record.userId, record.familyId, ctx);
     return { ok: false, reason: "reuse" };
   }
 
-  if (record.revokedAt) return { ok: false, reason: "revoked" };
+  // A token already spent by a rotation is reuse, even when replacedById
+  // was never linked. Only a deliberate end-of-session (logout, password
+  // change, suspension) is an ordinary "revoked".
+  if (record.revokedAt) {
+    if (record.revokedReason === "ROTATED") {
+      await handleReuse(record.userId, record.familyId, ctx);
+      return { ok: false, reason: "reuse" };
+    }
+    return { ok: false, reason: "revoked" };
+  }
+
   if (record.expiresAt <= new Date()) return { ok: false, reason: "expired" };
   if (record.user.status !== "ACTIVE") return { ok: false, reason: "inactive" };
 
-  await prisma.refreshToken.update({
-    where: { id: record.id },
+  // Claim the token with a single predicated UPDATE, and treat losing the
+  // race as theft.
+  //
+  // Everything above this line is a read, so two requests presenting the
+  // same refresh token at the same moment both passed all of those checks
+  // before either wrote anything. The previous unconditional update let
+  // both proceed: two live families from one token, and the reuse
+  // detection — the whole point of rotation — never fired. Making the
+  // revoke conditional on the row still being unspent moves the decision
+  // into the database, where exactly one of the two can win.
+  const claimed = await prisma.refreshToken.updateMany({
+    where: { id: record.id, revokedAt: null, replacedById: null },
     data: { revokedAt: new Date(), revokedReason: "ROTATED" },
   });
+
+  if (claimed.count === 0) {
+    await handleReuse(record.userId, record.familyId, ctx);
+    return { ok: false, reason: "reuse" };
+  }
 
   await issueTokenPair({
     userId: record.userId,
@@ -209,6 +232,31 @@ export async function rotateSession(
   });
 
   return { ok: true };
+}
+
+/**
+ * The response to a refresh token being presented twice.
+ *
+ * Deliberately indiscriminate: we cannot tell the legitimate holder from
+ * the thief, because both hold a valid-looking token. Revoking the whole
+ * family logs out both and forces a fresh login with both factors, which
+ * the attacker cannot complete.
+ */
+async function handleReuse(
+  userId: string,
+  familyId: string,
+  ctx: RequestContext,
+): Promise<void> {
+  await revokeFamily(familyId, "REFRESH_TOKEN_REUSE_DETECTED");
+  await clearAllAuthCookies();
+  await writeAudit({
+    actorUserId: userId,
+    action: "REFRESH_TOKEN_REUSE_DETECTED",
+    targetType: "RefreshTokenFamily",
+    targetId: familyId,
+    ipAddress: ctx.ipAddress,
+    userAgent: ctx.userAgent,
+  });
 }
 
 export async function revokeFamily(
