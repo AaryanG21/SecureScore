@@ -56,7 +56,7 @@ jobs:
       # The pinned testssl.sh checkout is a submodule, and the Docker build
       # copies it into the image. Without this the build context is empty
       # there and the failure is confusing.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
