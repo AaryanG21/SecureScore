@@ -52,6 +52,24 @@ services:
       # Bound to loopback: put a reverse proxy (Caddy, nginx, Cloudflare
       # Tunnel) in front rather than exposing the app directly.
       - "127.0.0.1:3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      # The default json-file driver is unbounded, so a long-running
+      # deployment fills the host disk with logs and takes the database
+      # volume down with it.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     # Defence in depth at the container boundary.
     read_only: true
     tmpfs:
