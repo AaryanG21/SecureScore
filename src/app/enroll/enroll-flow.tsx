@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
@@ -29,6 +30,10 @@ export function EnrollFlow() {
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the server says this account already has an authenticator.
+  // That is not an error the user can act on from this page, so it gets
+  // its own state and its own way out rather than a red box.
+  const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // Deliberately click-triggered rather than fired on mount: this call
@@ -45,6 +50,15 @@ export function EnrollFlow() {
     setBusy(false);
 
     if (!result.ok) {
+      // The account already has a second factor and this request did not
+      // carry a full session. Nothing on this page can resolve that, and
+      // the raw message ("Sign in fully before changing your
+      // authenticator") tells the user what is wrong without telling them
+      // where to go.
+      if (result.error.code === "reauth_required") {
+        setAlreadyEnrolled(true);
+        return;
+      }
       setError(result.error.message);
       return;
     }
@@ -68,6 +82,45 @@ export function EnrollFlow() {
     }
 
     setBackupCodes(result.data.backupCodes);
+  }
+
+  // How someone lands here: registering with an address that already has
+  // an account returns the same success response as a new registration —
+  // deliberately, so nobody can probe which addresses are registered — and
+  // that hands out an mfa_pending cookie and routes here. Every step of
+  // that is correct, and together they strand an existing user on a page
+  // that cannot help them.
+  //
+  // This says nothing a stranger could use: you only see it holding a
+  // valid mfa_pending token for this account, which means you already
+  // passed the password step.
+  if (alreadyEnrolled) {
+    return (
+      <Panel title="You already have an authenticator">
+        <p className="text-sm leading-relaxed text-ink-muted">
+          This account already has two-factor authentication set up, so
+          there is nothing to enrol here. Signing in will ask for a code
+          from the authenticator app you used before — or one of your
+          backup codes, if you no longer have it.
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link
+            href="/login"
+            className="rounded-md bg-signal px-4 py-2 text-sm font-semibold text-base transition-opacity hover:opacity-90"
+          >
+            Sign in
+          </Link>
+        </div>
+
+        <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-ink-faint">
+          To replace your authenticator — a new phone, say — sign in first,
+          then start enrolment from your account page. Issuing a new secret
+          to a half-authenticated session would let anyone who learned your
+          password alone swap out your second factor.
+        </p>
+      </Panel>
+    );
   }
 
   if (backupCodes) {

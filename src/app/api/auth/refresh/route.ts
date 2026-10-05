@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * triggered cross-site by an <img> tag, which is a session-fixation
  * primitive. Rotation and reuse detection live in lib/auth/session.ts.
  */
-export async function POST(request: NextRequest) { const meta = getRequestMeta(request);
+export async function POST(request: NextRequest) {
+  const meta = getRequestMeta(request);
 
   const blocked = await enforceCsrf(request);
   if (blocked) return blocked;
@@ -29,17 +30,21 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
   // prevent. Where no IP is available the real defence is the reuse
   // detection in rotateSession, which revokes the whole family on the
   // second presentation of any token.
-  if (meta.ipAddress) { const limited = await enforceRateLimit(request, "refresh", meta.ipAddress);
+  if (meta.ipAddress) {
+    const limited = await enforceRateLimit(request, "refresh", meta.ipAddress);
     if (limited) return limited;
   }
 
   const result = await rotateSession(meta);
 
-  if (!result.ok) { await recordAttempt({ email: "",
+  if (!result.ok) {
+    await recordAttempt({
+      email: "",
       stage: "REFRESH",
       success: false,
       reason: result.reason,
-      ...meta });
+      ...meta,
+    });
 
     // Token reuse is called out distinctly so the client can show "you were
     // signed out for your security" rather than a generic expiry message.

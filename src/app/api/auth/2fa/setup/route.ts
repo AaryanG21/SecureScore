@@ -27,18 +27,21 @@ export const dynamic = "force-dynamic";
  * ordering prevents locking someone out of their own account with a
  * secret they never successfully stored.
  */
-export async function POST(request: NextRequest) { const blocked = await enforceCsrf(request);
+export async function POST(request: NextRequest) {
+  const blocked = await enforceCsrf(request);
   if (blocked) return blocked;
 
   const session = await getSession();
 
   let userId: string | null = session?.id ?? null;
-  if (!userId) { const pending = await readCookie(MFA_COOKIE);
+  if (!userId) {
+    const pending = await readCookie(MFA_COOKIE);
     const claims = pending ? await verifyMfaPendingToken(pending) : null;
     userId = claims?.sub ?? null;
   }
 
-  if (!userId) { return apiError(401, "unauthenticated", "Start again from the sign-in page.");
+  if (!userId) {
+    return apiError(401, "unauthenticated", "Start again from the sign-in page.");
   }
 
   // Throttled once the account is known.
@@ -58,15 +61,19 @@ export async function POST(request: NextRequest) { const blocked = await enforce
   );
   if (limited) return limited;
 
-  const user = await prisma.user.findUnique({ where: { id: userId },
-    select: { id: true, email: true, status: true, twoFactorEnabled: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, status: true, twoFactorEnabled: true },
+  });
 
-  if (!user || user.status === "SUSPENDED") { return apiError(401, "unauthenticated", "Start again from the sign-in page.");
+  if (!user || user.status === "SUSPENDED") {
+    return apiError(401, "unauthenticated", "Start again from the sign-in page.");
   }
 
   // Re-enrollment by an already-enrolled user must be re-authenticated,
   // otherwise a hijacked session could silently swap the second factor.
-  if (user.twoFactorEnabled && !session) { return apiError(
+  if (user.twoFactorEnabled && !session) {
+    return apiError(
       403,
       "reauth_required",
       "Sign in fully before changing your authenticator.",
@@ -76,19 +83,25 @@ export async function POST(request: NextRequest) { const blocked = await enforce
   const secret = generateTotpSecret();
   const otpauthUri = buildOtpAuthUri(user.email, secret);
 
-  await prisma.user.update({ where: { id: user.id },
-    data: { twoFactorSecret: encryptTotpSecret(secret) } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { twoFactorSecret: encryptTotpSecret(secret) },
+  });
 
   // Rendered server-side as a data URI so the secret never needs to reach
   // a third-party QR service.
-  const qrDataUri = await QRCode.toDataURL(otpauthUri, { errorCorrectionLevel: "M",
+  const qrDataUri = await QRCode.toDataURL(otpauthUri, {
+    errorCorrectionLevel: "M",
     margin: 1,
-    width: 240 });
+    width: 240,
+  });
 
-  const response = apiOk({ // The manual-entry key, for users who cannot scan.
+  const response = apiOk({
+    // The manual-entry key, for users who cannot scan.
     secret,
     otpauthUri,
-    qrDataUri });
+    qrDataUri,
+  });
   response.headers.set("Cache-Control", "no-store");
   return response;
 }

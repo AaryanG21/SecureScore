@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
   if (blocked) return blocked;
 
   const body = await parseJsonBody(request, registerSchema);
-  if (!body.ok) { return apiError(400, "invalid_input", "Check the highlighted fields.", body.fieldErrors);
+  if (!body.ok) {
+    return apiError(400, "invalid_input", "Check the highlighted fields.", body.fieldErrors);
   }
 
   const { email, password } = body.data;
@@ -42,15 +43,21 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
   );
   if (limited) return limited;
 
-  const existing = await prisma.user.findUnique({ where: { email },
-    select: { id: true } });
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
 
-  if (existing) { await writeAudit({ action: "REGISTER",
+  if (existing) {
+    await writeAudit({
+      action: "REGISTER",
       targetType: "User",
       targetId: existing.id,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
-      metadata: { outcome: "duplicate_email_suppressed" } });
+      requestId: meta.requestId,
+      metadata: { outcome: "duplicate_email_suppressed" },
+    });
 
     // Deliberately the same shape and status as the success path. The
     // hashing cost below is skipped, which is a small timing difference;
@@ -60,21 +67,28 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
 
   const passwordHash = await hashPassword(password);
 
-  const user = await prisma.user.create({ data: { email, passwordHash, status: "PENDING_2FA", role: "USER" },
-    select: { id: true } });
+  const user = await prisma.user.create({
+    data: { email, passwordHash, status: "PENDING_2FA", role: "USER" },
+    select: { id: true },
+  });
 
-  await writeAudit({ actorUserId: user.id,
+  await writeAudit({
+    actorUserId: user.id,
     action: "REGISTER",
     targetType: "User",
     targetId: user.id,
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
-    metadata: { outcome: "created" } });
+    requestId: meta.requestId,
+    metadata: { outcome: "created" },
+  });
 
   const pendingToken = await signMfaPendingToken(user.id);
-  await setAuthCookie({ name: MFA_COOKIE,
+  await setAuthCookie({
+    name: MFA_COOKIE,
     value: pendingToken,
-    maxAgeSeconds: getEnv().MFA_PENDING_TTL_SECONDS });
+    maxAgeSeconds: getEnv().MFA_PENDING_TTL_SECONDS,
+  });
 
   return apiOk({ status: "enrollment_required" }, 201);
 }

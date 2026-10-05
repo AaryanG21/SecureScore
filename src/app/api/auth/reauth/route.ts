@@ -24,14 +24,16 @@ export const dynamic = "force-dynamic";
  * requireAdminWithReauth), so a session left open on an unlocked laptop is
  * not by itself enough to suspend users or revoke domain verifications.
  */
-export async function POST(request: NextRequest) { const meta = getRequestMeta(request);
+export async function POST(request: NextRequest) {
+  const meta = getRequestMeta(request);
   const env = getEnv();
 
   const blocked = await enforceCsrf(request);
   if (blocked) return blocked;
 
   const session = await getSession();
-  if (!session) { return apiError(401, "unauthenticated", "Sign in to continue.");
+  if (!session) {
+    return apiError(401, "unauthenticated", "Sign in to continue.");
   }
 
   const limited = await enforceRateLimit(
@@ -43,17 +45,23 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
   if (limited) return limited;
 
   const body = await parseJsonBody(request, reauthSchema);
-  if (!body.ok) { return apiError(400, "invalid_input", "Check the fields and try again.", body.fieldErrors);
+  if (!body.ok) {
+    return apiError(400, "invalid_input", "Check the fields and try again.", body.fieldErrors);
   }
 
-  const user = await prisma.user.findUnique({ where: { id: session.id },
-    select: { id: true,
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: {
+      id: true,
       email: true,
       passwordHash: true,
       twoFactorSecret: true,
-      twoFactorLastTimeStep: true } });
+      twoFactorLastTimeStep: true,
+    },
+  });
 
-  if (!user?.twoFactorSecret) { return apiError(401, "reauth_failed", "Could not confirm your identity.");
+  if (!user?.twoFactorSecret) {
+    return apiError(401, "reauth_failed", "Could not confirm your identity.");
   }
 
   const passwordOk = await verifyPassword(user.passwordHash, body.data.password);
@@ -63,39 +71,52 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
     user.twoFactorLastTimeStep,
   );
 
-  if (!passwordOk || !check.valid) { await recordAttempt({ email: user.email,
+  if (!passwordOk || !check.valid) {
+    await recordAttempt({
+      email: user.email,
       userId: user.id,
       stage: "REAUTH",
       success: false,
       reason: passwordOk ? "bad_totp" : "bad_password",
-      ...meta });
-    await writeAudit({ actorUserId: user.id,
+      ...meta,
+    });
+    await writeAudit({
+      actorUserId: user.id,
       action: "REAUTH_FAILURE",
       targetType: "User",
       targetId: user.id,
       ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent });
+      userAgent: meta.userAgent,
+      requestId: meta.requestId,
+    });
     return apiError(401, "reauth_failed", "Could not confirm your identity.");
   }
 
   await commitTotpTimeStep(user.id, check.timeStep!);
 
   const token = await signReauthToken(user.id);
-  await setAuthCookie({ name: REAUTH_COOKIE,
+  await setAuthCookie({
+    name: REAUTH_COOKIE,
     value: token,
-    maxAgeSeconds: env.REAUTH_TTL_SECONDS });
+    maxAgeSeconds: env.REAUTH_TTL_SECONDS,
+  });
 
-  await recordAttempt({ email: user.email,
+  await recordAttempt({
+    email: user.email,
     userId: user.id,
     stage: "REAUTH",
     success: true,
-    ...meta });
-  await writeAudit({ actorUserId: user.id,
+    ...meta,
+  });
+  await writeAudit({
+    actorUserId: user.id,
     action: "REAUTH_SUCCESS",
     targetType: "User",
     targetId: user.id,
     ipAddress: meta.ipAddress,
-    userAgent: meta.userAgent });
+    userAgent: meta.userAgent,
+    requestId: meta.requestId,
+  });
 
   return apiOk({ status: "reauthenticated", expiresInSeconds: env.REAUTH_TTL_SECONDS });
 }
