@@ -26,10 +26,17 @@ COPY . .
 
 # Generates the Prisma client into src/generated, then builds Next.
 # A dummy DATABASE_URL is enough for codegen; it is never connected to.
+#
+# The two keys are placeholders, not secrets, and they are passed as a RUN
+# prefix rather than ENV so they never persist into a layer's environment.
+# Both decode to exactly 32 bytes, which is what src/lib/env.ts requires —
+# the previous values decoded to 34 despite being named "32bytes", so the
+# page-data collection step of `next build` rejected them and this image
+# had never successfully built. CI is what surfaced that.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    JWT_SIGNING_KEY="YnVpbGQtdGltZS1wbGFjZWhvbGRlci1rZXktMzJieXRlcw==" \
-    TOTP_ENCRYPTION_KEY="YnVpbGQtdGltZS1wbGFjZWhvbGRlci1rZXktMzJieXRlcw==" \
+    JWT_SIGNING_KEY="YnVpbGQtdGltZS1wbGFjZWhvbGRlci1ub3QtcmVhbCE=" \
+    TOTP_ENCRYPTION_KEY="YnVpbGQtdGltZS1wbGFjZWhvbGRlci1ub3QtcmVhbCE=" \
     APP_ORIGIN="http://localhost:3000" \
     npm run build
 
