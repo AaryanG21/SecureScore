@@ -85,6 +85,50 @@ const FORBIDDEN_KEY = /pass(word|hash)|secret|token|otp|code|authorization|cooki
 const MAX_VALUE_LENGTH = 120;
 
 /**
+ * Credential-shaped values, caught regardless of the key they arrived under.
+ *
+ * FORBIDDEN_KEY only looks at names, which works as long as whoever writes
+ * the call site names the field honestly. The failure mode is a secret
+ * arriving under an innocuous key — `evidence`, `detail`, `value`, or an
+ * array element with no key at all — where it was merely truncated to 120
+ * characters and written to a table that then refuses to let anyone delete
+ * it. Truncating a JWT still leaves its header and most of its payload.
+ *
+ * So values are matched too:
+ *
+ *   - three base64url segments separated by dots: a JWT
+ *   - a long unbroken run of hex: a token hash, a key, a session id
+ *   - a long unbroken run of base64: anything from randomToken(32)
+ *   - a PHC hash string: $argon2id$...
+ *
+ * Thresholds sit above what legitimate metadata contains. The longest real
+ * values written here are cuids (25 chars) and hostnames, neither of which
+ * is a 40-character hex run or a dotted triple. A false positive costs a
+ * redacted log field; a false negative costs a permanent secret in an
+ * append-only table.
+ */
+const JWT_SHAPE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
+const LONG_HEX = /^[0-9a-fA-F]{40,}$/;
+const LONG_BASE64 = /^[A-Za-z0-9+/_-]{40,}={0,2}$/;
+const PHC_HASH = /^\$argon2(id|i|d)\$/;
+
+function looksLikeSecret(value: string): boolean {
+  const trimmed = value.trim();
+  if (PHC_HASH.test(trimmed)) return true;
+  if (JWT_SHAPE.test(trimmed)) return true;
+  if (LONG_HEX.test(trimmed)) return true;
+  if (LONG_BASE64.test(trimmed)) return true;
+  return false;
+}
+
+function redactString(value: string): string {
+  if (looksLikeSecret(value)) return "[redacted: credential-shaped value]";
+  return value.length > MAX_VALUE_LENGTH
+    ? `${value.slice(0, MAX_VALUE_LENGTH)}…[truncated]`
+    : value;
+}
+
+/**
  * Strips credential-shaped material out of metadata before it is persisted.
  * Deliberately conservative: an over-redacted log is an inconvenience, an
  * under-redacted one is a breach.
@@ -105,17 +149,16 @@ export function redactMetadata(
     }
 
     if (typeof value === "string") {
-      out[key] =
-        value.length > MAX_VALUE_LENGTH
-          ? `${value.slice(0, MAX_VALUE_LENGTH)}…[truncated]`
-          : value;
+      out[key] = redactString(value);
     } else if (Array.isArray(value)) {
       out[key] = value
         .slice(0, 20)
         .map((v) =>
           typeof v === "object" && v !== null
             ? redactMetadata(v as Record<string, unknown>, depth + 1)
-            : v,
+            : typeof v === "string"
+              ? redactString(v)
+              : v,
         );
     } else if (typeof value === "object" && value !== null) {
       out[key] = redactMetadata(value as Record<string, unknown>, depth + 1);
