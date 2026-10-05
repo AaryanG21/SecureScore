@@ -1,0 +1,28 @@
+# The README said to enable this. It was not enabled.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the patch noise, individual PRs for anything that could
+      # break a build — this project pins next and react exactly.
+      patch-dependencies:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+
+  # testssl.sh is vendored as a submodule and deliberately pinned, so this
+  # only opens a PR to tell you a new release exists. Read the README's
+  # tool-bump checklist before merging one: the recorded version and commit
+  # have to be updated with it.
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    schedule:
+      interval: monthly

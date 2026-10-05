@@ -1,0 +1,117 @@
+name: CI
+
+# Nothing automated checked this repository before. Two of the defects
+# fixed on 2026-10-05 would have been caught here and nowhere else: the
+# Dockerfile could not build (a COPY with no source), and the pinned
+# Next.js version carried a critical advisory. Both are invisible to
+# `next dev`, which is the only thing anyone had been running.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So a newly published advisory against an unchanged lockfile is still
+  # found. Supply-chain problems do not arrive with a commit.
+  schedule:
+    - cron: "17 6 * * 1"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fulcrum
+          POSTGRES_PASSWORD: fulcrum
+          POSTGRES_DB: fulcrum_test
+        options: >-
+          --health-cmd "pg_isready -U fulcrum"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://fulcrum:fulcrum@localhost:5432/fulcrum_test?schema=public
+      # Build- and test-time only, and they are not secrets: they exist so
+      # the env schema is satisfied, exactly as the Dockerfile does it.
+      # Both decode to 32 bytes, which is what the schema requires.
+      JWT_SIGNING_KEY: Y2ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldA==
+      TOTP_ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldA==
+      APP_ORIGIN: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      # The pinned testssl.sh checkout is a submodule, and the Docker build
+      # copies it into the image. Without this the build context is empty
+      # there and the failure is confusing.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # --max-warnings=0 lives in the npm script, so local and CI agree.
+      # Lint is not part of `next build` (Next 16 removed the config key),
+      # so without this step it would run nowhere.
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test:run
+
+      # Reported, never enforced. Every assertion in this suite is
+      # hand-written by the author as a course requirement, and an empty
+      # `it` block passes vacuously — so a green suite currently proves
+      # only that the imports resolve. Failing the build on it would
+      # block all work; saying nothing would let 262 green checkmarks
+      # imply coverage that does not exist. So it is surfaced as a number
+      # that goes up as the assertions get written.
+      - name: Report assertion coverage
+        if: always()
+        run: node scripts/assertion-coverage.mjs
+
+      - name: Build
+        run: npm run build
+
+      # The step that would have caught the broken COPY.
+      - name: Build the production image
+        run: docker build -t fulcrum:ci .
+
+      # Hard gate on critical only. The high-severity findings in the
+      # Prisma CLI chain are dev-only, are reasoned about in the README's
+      # dependency-hygiene section, and fixing them would downgrade to
+      # Prisma 6 — so failing on them would mean a permanently red build,
+      # which teaches everyone to ignore the signal.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Full audit (informational)
+        if: always()
+        continue-on-error: true
+        run: npm audit

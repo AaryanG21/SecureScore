@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && node .next/standalone/server.js",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
