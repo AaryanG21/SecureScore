@@ -20,7 +20,7 @@ export async function DELETE(
 ) {
   const meta = getRequestMeta(request);
 
-  const guard = await requireUser(request);
+  const guard = await requireUser(request, { rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const { domainId } = await context.params;

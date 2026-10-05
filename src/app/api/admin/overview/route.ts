@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * hashes never leave the database, not even for an administrator.
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireAdmin(request, { skipCsrf: true });
+  const guard = await requireAdmin(request, { skipCsrf: true, rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const [users, domains, scans, counts] = await Promise.all([

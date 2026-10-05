@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 /** Lists the caller's own domains. Scoped by userId, never by a client filter. */
 export async function GET(request: NextRequest) {
-  const guard = await requireUser(request, { skipCsrf: true });
+  const guard = await requireUser(request, { skipCsrf: true, rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const domains = await prisma.domain.findMany({

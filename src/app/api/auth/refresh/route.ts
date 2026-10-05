@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { apiError, apiOk, getRequestMeta } from "@/lib/http";
+import { apiError, apiOk, apiRateLimited, getRequestMeta } from "@/lib/http";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { verifyCsrf } from "@/lib/security/csrf";
 import { rotateSession } from "@/lib/auth/session";
 import { recordAttempt } from "@/lib/auth/attempts";
@@ -20,6 +21,21 @@ export async function POST(request: NextRequest) {
   const csrf = await verifyCsrf(request);
   if (!csrf.ok) {
     return apiError(403, "csrf_failed", "Request could not be verified.");
+  }
+
+  // Bounded per IP, and only when an IP is actually known.
+  //
+  // This endpoint is pre-session by nature — it is called because the
+  // access token expired — so there is no account to key on. Falling back
+  // to a shared "unknown-ip" bucket would put every user of the
+  // deployment in one 60-per-hour counter and turn the limiter into a
+  // self-inflicted outage, which is worse than the grinding it would
+  // prevent. Where no IP is available the real defence is the reuse
+  // detection in rotateSession, which revokes the whole family on the
+  // second presentation of any token.
+  if (meta.ipAddress) {
+    const limit = checkRateLimit("refresh", meta.ipAddress);
+    if (!limit.allowed) return apiRateLimited(limit.retryAfterSeconds);
   }
 
   const result = await rotateSession(meta);

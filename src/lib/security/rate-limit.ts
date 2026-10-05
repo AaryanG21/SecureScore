@@ -99,6 +99,10 @@ export const RATE_LIMITS = {
     maxBackoffSeconds: 3600,
   },
   register: { limit: 3, windowSeconds: 3600, exponentialBackoff: true },
+  // An access token lives 10 minutes, so a busy session legitimately
+  // refreshes about six times an hour. This is generous against that and
+  // still bounds an attacker grinding stolen refresh tokens.
+  refresh: { limit: 60, windowSeconds: 3600 },
   // Scans are expensive (they spawn testssl.sh), so they are throttled
   // harder than ordinary reads.
   scan: { limit: 10, windowSeconds: 3600 },
@@ -121,6 +125,8 @@ export function checkRateLimit(
   key: string,
   now = Date.now(),
 ): RateLimitResult {
+  maybeSweep(now);
+
   const rule: RateLimitRule = RATE_LIMITS[name];
   const compositeKey = `${name}:${key}`;
   const windowMs = rule.windowSeconds * 1000;
@@ -178,6 +184,26 @@ export function checkRateLimit(
 /** Clears a key's counters. Called after a genuinely successful auth. */
 export function resetRateLimit(name: RateLimitName, key: string): void {
   store.delete(`${name}:${key}`);
+}
+
+/** When the last sweep ran. */
+let lastSweptAt = 0;
+const SWEEP_INTERVAL_MS = 600_000;
+
+/**
+ * Runs the sweep at most once per interval, piggybacked on a real request.
+ *
+ * sweepRateLimits existed but nothing in the application ever called it —
+ * only a test imported it — so the comment below described a vector that
+ * was live. Driving it from checkRateLimit rather than a setInterval keeps
+ * it tied to actual traffic: an idle process does no work, and there is no
+ * timer to leak across a hot reload or hold the event loop open at
+ * shutdown.
+ */
+function maybeSweep(now: number): void {
+  if (now - lastSweptAt < SWEEP_INTERVAL_MS) return;
+  lastSweptAt = now;
+  sweepRateLimits(now);
 }
 
 /**

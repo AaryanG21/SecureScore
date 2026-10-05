@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
 
 /** The caller's own scan history. Scoped by session, never by a query param. */
 export async function GET(request: NextRequest) {
-  const guard = await requireUser(request, { skipCsrf: true });
+  const guard = await requireUser(request, { skipCsrf: true, rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const scans = await prisma.scanResult.findMany({

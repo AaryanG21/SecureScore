@@ -18,7 +18,7 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ scanId: string }> },
 ) {
-  const guard = await requireUser(request, { skipCsrf: true });
+  const guard = await requireUser(request, { skipCsrf: true, rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const { scanId } = await context.params;

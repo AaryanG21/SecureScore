@@ -1,6 +1,7 @@
+import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk } from "@/lib/http";
-import { getSession } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/guards";
 import { countUnusedBackupCodes } from "@/lib/auth/totp";
 
 export const runtime = "nodejs";
@@ -13,11 +14,14 @@ export const dynamic = "force-dynamic";
  * links are shown; it is never what authorizes an action — every protected
  * route re-checks the role server-side against the database.
  */
-export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return apiError(401, "unauthenticated", "Sign in to continue.");
-  }
+export async function GET(request: NextRequest) {
+  // Through the guard rather than getSession() directly, so this route is
+  // covered by the blanket per-route ceiling like every other read. It is
+  // polled by the client shell, which makes it the cheapest endpoint to
+  // hammer.
+  const guard = await requireUser(request, { skipCsrf: true, rateLimit: "api" });
+  if (!guard.ok) return guard.response;
+  const session = guard.value;
 
   const [user, remainingBackupCodes] = await Promise.all([
     prisma.user.findUnique({

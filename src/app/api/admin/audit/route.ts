@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const meta = getRequestMeta(request);
 
-  const guard = await requireAdmin(request, { skipCsrf: true });
+  const guard = await requireAdmin(request, { skipCsrf: true, rateLimit: "api" });
   if (!guard.ok) return guard.response;
 
   const url = new URL(request.url);

@@ -1,7 +1,8 @@
 import { type NextRequest } from "next/server";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
-import { apiError, apiOk } from "@/lib/http";
+import { apiError, apiOk, apiRateLimited, getRequestMeta } from "@/lib/http";
+import { checkRateLimit, ipAccountKey } from "@/lib/security/rate-limit";
 import { verifyCsrf } from "@/lib/security/csrf";
 import { MFA_COOKIE, readCookie } from "@/lib/auth/cookies";
 import { verifyMfaPendingToken } from "@/lib/auth/tokens";
@@ -44,6 +45,18 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return apiError(401, "unauthenticated", "Start again from the sign-in page.");
   }
+
+  // Throttled once the account is known.
+  //
+  // Each call mints a fresh secret and overwrites the stored one, so an
+  // unbounded endpoint lets anyone holding a half-authenticated cookie
+  // churn a user's enrollment indefinitely — and every churn invalidates
+  // the authenticator entry the user may have just scanned. Keyed on the
+  // account rather than the request so it cannot be sidestepped by
+  // reconnecting.
+  const meta = getRequestMeta(request);
+  const limit = checkRateLimit("twoFactor", ipAccountKey(meta.ipAddress, userId));
+  if (!limit.allowed) return apiRateLimited(limit.retryAfterSeconds);
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
