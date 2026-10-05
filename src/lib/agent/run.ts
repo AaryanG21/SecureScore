@@ -142,12 +142,23 @@ async function stepHeaders(
 
     return { findings: evaluateHeaders(probe), probe };
   } catch (error) {
+    // probeHeaders returns curated reasons for every failure it expects, so
+    // reaching here means something unforeseen threw. Its message goes to
+    // the server log, not into the scan record: a raw Node or TLS error
+    // string is persisted, rendered on the scorecard and returned over the
+    // API, and it describes our internals rather than the target's posture.
+    console.error(
+      "[scan] unexpected failure in the header step",
+      error instanceof Error ? error.message : "unknown",
+    );
+
     return {
       findings: [],
       probe: null,
       degraded: {
         step: "headers",
-        reason: error instanceof Error ? error.message : "Header probe failed",
+        reason:
+          "The header check could not be completed. The HTTP posture of this host is unknown, not verified clean.",
       },
     };
   }

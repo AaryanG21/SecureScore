@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk, apiRateLimited, getRequestMeta } from "@/lib/http";
-import { verifyCsrf } from "@/lib/security/csrf";
+import { enforceCsrf } from "@/lib/auth/guards";
 import { checkRateLimit, ipAccountKey, resetRateLimit } from "@/lib/security/rate-limit";
 import { MFA_COOKIE, clearAuthCookie, readCookie } from "@/lib/auth/cookies";
 import { verifyMfaPendingToken } from "@/lib/auth/tokens";
@@ -31,10 +31,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const meta = getRequestMeta(request);
 
-  const csrf = await verifyCsrf(request);
-  if (!csrf.ok) {
-    return apiError(403, "csrf_failed", "Request could not be verified.");
-  }
+  const blocked = await enforceCsrf(request);
+  if (blocked) return blocked;
 
   const pending = await readCookie(MFA_COOKIE);
   const claims = pending ? await verifyMfaPendingToken(pending) : null;

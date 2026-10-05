@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { apiError, apiOk, getRequestMeta } from "@/lib/http";
 import { requireAdmin } from "@/lib/auth/guards";
 import { paginationSchema } from "@/lib/validation/schemas";
-import { writeAudit } from "@/lib/audit";
+import { AUDIT_ACTIONS, isAuditAction, writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +32,23 @@ export async function GET(request: NextRequest) {
   }
 
   const { cursor, limit } = parsed.data;
-  const actionFilter = url.searchParams.get("action");
+
+  // Validate the filter instead of passing it straight to the query.
+  //
+  // It arrived as a free-form string, so a typo — or an action name that
+  // no longer exists — produced an empty page that read as "nothing
+  // happened" rather than "you asked for something that cannot happen".
+  // On an audit log, those two answers must never look alike.
+  const requestedAction = url.searchParams.get("action");
+  if (requestedAction !== null && !isAuditAction(requestedAction)) {
+    return apiError(
+      400,
+      "invalid_input",
+      "Unknown audit action. An empty result would be indistinguishable from a real absence of events, so the filter is rejected instead.",
+      { action: [`Must be one of: ${AUDIT_ACTIONS.join(", ")}`] },
+    );
+  }
+  const actionFilter = requestedAction;
 
   const entries = await prisma.auditLog.findMany({
     where: actionFilter ? { action: actionFilter } : undefined,

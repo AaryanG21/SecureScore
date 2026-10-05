@@ -39,12 +39,12 @@ export async function POST(request: NextRequest) {
   if (!currentOk) {
     await writeAudit({
       actorUserId: user.id,
-      action: "PASSWORD_CHANGED",
+      action: "PASSWORD_CHANGE_REJECTED",
       targetType: "User",
       targetId: user.id,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
-      metadata: { outcome: "rejected_bad_current_password" },
+      metadata: { reason: "bad_current_password" },
     });
     return apiError(401, "invalid_credentials", "Your current password is incorrect.");
   }

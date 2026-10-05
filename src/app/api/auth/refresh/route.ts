@@ -1,7 +1,6 @@
 import { type NextRequest } from "next/server";
-import { apiError, apiOk, apiRateLimited, getRequestMeta } from "@/lib/http";
-import { checkRateLimit } from "@/lib/security/rate-limit";
-import { verifyCsrf } from "@/lib/security/csrf";
+import { apiError, apiOk, getRequestMeta } from "@/lib/http";
+import { enforceCsrf, enforceRateLimit } from "@/lib/auth/guards";
 import { rotateSession } from "@/lib/auth/session";
 import { recordAttempt } from "@/lib/auth/attempts";
 
@@ -15,13 +14,10 @@ export const dynamic = "force-dynamic";
  * triggered cross-site by an <img> tag, which is a session-fixation
  * primitive. Rotation and reuse detection live in lib/auth/session.ts.
  */
-export async function POST(request: NextRequest) {
-  const meta = getRequestMeta(request);
+export async function POST(request: NextRequest) { const meta = getRequestMeta(request);
 
-  const csrf = await verifyCsrf(request);
-  if (!csrf.ok) {
-    return apiError(403, "csrf_failed", "Request could not be verified.");
-  }
+  const blocked = await enforceCsrf(request);
+  if (blocked) return blocked;
 
   // Bounded per IP, and only when an IP is actually known.
   //
@@ -33,21 +29,17 @@ export async function POST(request: NextRequest) {
   // prevent. Where no IP is available the real defence is the reuse
   // detection in rotateSession, which revokes the whole family on the
   // second presentation of any token.
-  if (meta.ipAddress) {
-    const limit = checkRateLimit("refresh", meta.ipAddress);
-    if (!limit.allowed) return apiRateLimited(limit.retryAfterSeconds);
+  if (meta.ipAddress) { const limited = await enforceRateLimit(request, "refresh", meta.ipAddress);
+    if (limited) return limited;
   }
 
   const result = await rotateSession(meta);
 
-  if (!result.ok) {
-    await recordAttempt({
-      email: "",
+  if (!result.ok) { await recordAttempt({ email: "",
       stage: "REFRESH",
       success: false,
       reason: result.reason,
-      ...meta,
-    });
+      ...meta });
 
     // Token reuse is called out distinctly so the client can show "you were
     // signed out for your security" rather than a generic expiry message.

@@ -8,8 +8,8 @@ import {
 } from "@/lib/auth/password";
 import { loginSchema, parseJsonBody } from "@/lib/validation/schemas";
 import { apiError, apiOk, apiRateLimited, getRequestMeta } from "@/lib/http";
+import { enforceCsrf } from "@/lib/auth/guards";
 import { checkRateLimit, ipAccountKey, resetRateLimit } from "@/lib/security/rate-limit";
-import { verifyCsrf } from "@/lib/security/csrf";
 import { writeAudit } from "@/lib/audit";
 import { recordAttempt } from "@/lib/auth/attempts";
 import { lockState, recordFailure } from "@/lib/auth/lockout";
@@ -38,10 +38,8 @@ export async function POST(request: NextRequest) {
   const meta = getRequestMeta(request);
   const env = getEnv();
 
-  const csrf = await verifyCsrf(request);
-  if (!csrf.ok) {
-    return apiError(403, "csrf_failed", "Request could not be verified.");
-  }
+  const blocked = await enforceCsrf(request);
+  if (blocked) return blocked;
 
   const body = await parseJsonBody(request, loginSchema);
   if (!body.ok) {

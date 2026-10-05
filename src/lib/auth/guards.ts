@@ -28,44 +28,84 @@ export interface GuardOptions {
   skipCsrf?: boolean;
 }
 
+/**
+ * Rate-limit check that records its own refusals.
+ *
+ * Exported because the pre-session auth routes cannot go through
+ * requireUser — there is no session yet — but they must still produce the
+ * same audit trail. Before this existed they called checkRateLimit
+ * directly, so RATE_LIMIT_TRIPPED was emitted only by the handful of
+ * routes that used a guard, and the log under-reported attacks on exactly
+ * the endpoints most worth attacking.
+ *
+ * Returns a response to send, or null to continue.
+ */
+export async function enforceRateLimit(
+  request: Request,
+  policy: RateLimitName,
+  key: string,
+  actorUserId?: string | null,
+): Promise<NextResponse | null> {
+  const result = checkRateLimit(policy, key);
+  if (result.allowed) return null;
+
+  const meta = getRequestMeta(request);
+  await writeAudit({
+    actorUserId: actorUserId ?? null,
+    action: "RATE_LIMIT_TRIPPED",
+    targetType: "Route",
+    targetId: new URL(request.url).pathname,
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+    metadata: { policy, strikes: result.strikes },
+  });
+
+  return apiRateLimited(result.retryAfterSeconds);
+}
+
+/**
+ * CSRF check that records its own refusals.
+ *
+ * Same reasoning as enforceRateLimit: one implementation, so a rejected
+ * request is logged identically wherever it was rejected. Returns a
+ * response to send, or null to continue.
+ */
+export async function enforceCsrf(
+  request: Request,
+  actorUserId?: string | null,
+): Promise<NextResponse | null> {
+  const csrf = await verifyCsrf(request);
+  if (csrf.ok) return null;
+
+  const meta = getRequestMeta(request);
+  await writeAudit({
+    actorUserId: actorUserId ?? null,
+    action: "CSRF_REJECTED",
+    targetType: "Route",
+    targetId: new URL(request.url).pathname,
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+    metadata: { reason: csrf.reason },
+  });
+
+  return apiError(403, "csrf_failed", "Request could not be verified.");
+}
+
 async function runCommonChecks(
   request: Request,
   options: GuardOptions,
   userId?: string,
 ): Promise<NextResponse | null> {
-  const meta = getRequestMeta(request);
-
   if (options.rateLimit) {
+    const meta = getRequestMeta(request);
     const key = `${meta.ipAddress ?? "unknown-ip"}|${userId ?? "anon"}`;
-    const result = checkRateLimit(options.rateLimit, key);
-    if (!result.allowed) {
-      await writeAudit({
-        actorUserId: userId ?? null,
-        action: "RATE_LIMIT_TRIPPED",
-        targetType: "Route",
-        targetId: new URL(request.url).pathname,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        metadata: { policy: options.rateLimit, strikes: result.strikes },
-      });
-      return apiRateLimited(result.retryAfterSeconds);
-    }
+    const limited = await enforceRateLimit(request, options.rateLimit, key, userId);
+    if (limited) return limited;
   }
 
   if (!options.skipCsrf) {
-    const csrf = await verifyCsrf(request);
-    if (!csrf.ok) {
-      await writeAudit({
-        actorUserId: userId ?? null,
-        action: "CSRF_REJECTED",
-        targetType: "Route",
-        targetId: new URL(request.url).pathname,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        metadata: { reason: csrf.reason },
-      });
-      return apiError(403, "csrf_failed", "Request could not be verified.");
-    }
+    const blocked = await enforceCsrf(request, userId);
+    if (blocked) return blocked;
   }
 
   return null;

@@ -17,51 +17,79 @@ import type { Prisma } from "@/generated/prisma/client";
  * (see prisma/migrations/..._audit_log_append_only).
  */
 
-export type AuditAction =
+/**
+ * Every action this application can record.
+ *
+ * A const array rather than a bare union, so the set can be validated at
+ * runtime as well as checked at compile time. The admin audit view filters
+ * on an `action` query parameter that arrives as a free-form string; with
+ * only a type there was nothing to check it against, so a typo silently
+ * returned zero rows and looked like "nothing happened" rather than "you
+ * asked for an action that does not exist".
+ *
+ * Four names were removed from this list because nothing ever wrote them:
+ * ACCOUNT_UNLOCKED, TWO_FACTOR_RESET, BACKUP_CODES_REGENERATED and
+ * DOMAIN_VERIFICATION_REVOKED. The first and last were duplicates of the
+ * ADMIN_* actions that are actually emitted; the other two described
+ * features that do not exist. A declared action nobody writes is worse
+ * than a missing one — it implies a capability, and it offers the audit
+ * filter a value that can only ever return nothing.
+ */
+export const AUDIT_ACTIONS = [
   // Authentication
-  | "REGISTER"
-  | "LOGIN_PASSWORD_SUCCESS"
-  | "LOGIN_PASSWORD_FAILURE"
-  | "LOGIN_2FA_SUCCESS"
-  | "LOGIN_2FA_FAILURE"
-  | "LOGIN_BACKUP_CODE_USED"
-  | "LOGIN_BLOCKED_LOCKED"
-  | "LOGIN_BLOCKED_SUSPENDED"
-  | "LOGIN_BLOCKED_RATE_LIMIT"
-  | "LOGOUT"
-  | "SESSION_CREATED"
-  | "REFRESH_TOKEN_REUSE_DETECTED"
-  | "ACCOUNT_LOCKED"
-  | "ACCOUNT_UNLOCKED"
-  | "PASSWORD_CHANGED"
-  | "TWO_FACTOR_ENROLLED"
-  | "TWO_FACTOR_RESET"
-  | "BACKUP_CODES_REGENERATED"
-  | "REAUTH_SUCCESS"
-  | "REAUTH_FAILURE"
+  "REGISTER",
+  "LOGIN_PASSWORD_SUCCESS",
+  "LOGIN_PASSWORD_FAILURE",
+  "LOGIN_2FA_SUCCESS",
+  "LOGIN_2FA_FAILURE",
+  "LOGIN_BACKUP_CODE_USED",
+  "LOGIN_BLOCKED_LOCKED",
+  "LOGIN_BLOCKED_SUSPENDED",
+  "LOGIN_BLOCKED_RATE_LIMIT",
+  "LOGOUT",
+  "SESSION_CREATED",
+  "REFRESH_TOKEN_REUSE_DETECTED",
+  "ACCOUNT_LOCKED",
+  "PASSWORD_CHANGED",
+  // Distinct from PASSWORD_CHANGED: a refused attempt is a different
+  // event with different significance. Recording both under one name made
+  // any count of password changes an overcount, and a burst of failures
+  // against one account — which is what credential-stuffing a known
+  // session looks like — indistinguishable from ordinary use unless you
+  // opened the metadata of every row.
+  "PASSWORD_CHANGE_REJECTED",
+  "TWO_FACTOR_ENROLLED",
+  "REAUTH_SUCCESS",
+  "REAUTH_FAILURE",
   // Authorization / safety
-  | "CSRF_REJECTED"
-  | "RATE_LIMIT_TRIPPED"
-  | "FORBIDDEN_ROLE_ACCESS"
+  "CSRF_REJECTED",
+  "RATE_LIMIT_TRIPPED",
+  "FORBIDDEN_ROLE_ACCESS",
   // Domains
-  | "DOMAIN_ADDED"
-  | "DOMAIN_VERIFICATION_ATTEMPT"
-  | "DOMAIN_VERIFIED"
-  | "DOMAIN_REMOVED"
-  | "DOMAIN_VERIFICATION_REVOKED"
+  "DOMAIN_ADDED",
+  "DOMAIN_VERIFICATION_ATTEMPT",
+  "DOMAIN_VERIFIED",
+  "DOMAIN_REMOVED",
   // Scans
-  | "SCAN_REQUESTED"
-  | "SCAN_REFUSED_UNVERIFIED_DOMAIN"
-  | "SCAN_REFUSED_NOT_OWNER"
-  | "SCAN_COMPLETED"
-  | "SCAN_FAILED"
-  | "SCAN_INJECTION_ATTEMPT_IGNORED"
+  "SCAN_REQUESTED",
+  "SCAN_REFUSED_UNVERIFIED_DOMAIN",
+  "SCAN_REFUSED_NOT_OWNER",
+  "SCAN_COMPLETED",
+  "SCAN_FAILED",
+  "SCAN_INJECTION_ATTEMPT_IGNORED",
   // Admin
-  | "ADMIN_USER_SUSPENDED"
-  | "ADMIN_USER_REINSTATED"
-  | "ADMIN_USER_UNLOCKED"
-  | "ADMIN_DOMAIN_REVOKED"
-  | "ADMIN_AUDIT_LOG_VIEWED";
+  "ADMIN_USER_SUSPENDED",
+  "ADMIN_USER_REINSTATED",
+  "ADMIN_USER_UNLOCKED",
+  "ADMIN_DOMAIN_REVOKED",
+  "ADMIN_AUDIT_LOG_VIEWED",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export function isAuditAction(value: string): value is AuditAction {
+  return (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
 
 export interface AuditEntry {
   actorUserId?: string | null;
