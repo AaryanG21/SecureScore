@@ -42,8 +42,12 @@ services:
       TESTSSL_PATH: /app/vendor/testssl.sh/testssl.sh
       TESTSSL_TIMEOUT_MS: ${TESTSSL_TIMEOUT_MS:-300000}
       # Set to "true" only when the reverse proxy in front of this
-      # container is one you control and it sets X-Forwarded-For.
+      # container is one you control and it sets X-Forwarded-For. When it
+      # is true, TRUSTED_PROXY_HOPS must be the number of proxies in front
+      # of the app (1 for a single Caddy/nginx, 2 with Cloudflare in front
+      # of that) or the app refuses to start. See .env.example.
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
     ports:
       # Bound to loopback: put a reverse proxy (Caddy, nginx, Cloudflare
       # Tunnel) in front rather than exposing the app directly.

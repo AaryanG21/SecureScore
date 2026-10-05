@@ -64,14 +64,40 @@ const envSchema = z.object({
   TESTSSL_PATH: z.string().default("./vendor/testssl.sh/testssl.sh"),
   TESTSSL_TIMEOUT_MS: z.coerce.number().int().min(10_000).max(1_800_000).default(300_000),
 
-  // Trust the left-most X-Forwarded-For entry only when a reverse proxy
-  // you control actually sets it. Defaults off: a spoofable client IP
-  // would let an attacker sidestep per-IP rate limiting.
+  // Trust X-Forwarded-For only when a reverse proxy you control actually
+  // sets it. Defaults off: a spoofable client IP would let an attacker
+  // sidestep per-IP rate limiting.
   TRUST_PROXY_HEADERS: z
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
-});
+
+  // How many reverse proxies you run in front of this app.
+  //
+  // This number is load-bearing, not cosmetic. X-Forwarded-For is a list
+  // that each hop appends to, so the entries a client can forge are on the
+  // LEFT and the ones your own infrastructure wrote are on the RIGHT.
+  // Reading the left-most entry — the obvious-looking choice — reads
+  // attacker-controlled data. The client address is the entry this many
+  // places in from the right, and knowing the hop count is the only way to
+  // find it.
+  //
+  // One Caddy/nginx/ALB in front: 1. Cloudflare in front of that: 2.
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+})
+  .superRefine((env, ctx) => {
+    // Trusting the header without saying how many hops to skip would send
+    // us back to reading the left-most, forgeable entry. Fail loudly at
+    // boot rather than silently rate-limiting on an attacker's string.
+    if (env.TRUST_PROXY_HEADERS && env.TRUSTED_PROXY_HOPS === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["TRUSTED_PROXY_HOPS"],
+        message:
+          "must be at least 1 when TRUST_PROXY_HEADERS is true — set it to the number of reverse proxies in front of this app",
+      });
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 
