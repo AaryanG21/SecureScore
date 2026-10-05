@@ -96,16 +96,48 @@ export async function runScan(request: ScanRequest): Promise<ScanRun> {
   }
 
   /* -- step 4: TLS via the pinned external tool ------------------------ */
+  let tlsObserved = false;
   if (request.includeTls !== false) {
     const tlsStep = await stepTls(hostname);
     findings.push(...tlsStep.findings);
     if (tlsStep.degraded) degraded.push(tlsStep.degraded);
     testsslVersion = tlsStep.version;
+    tlsObserved = tlsStep.observed;
   } else {
-    degraded.push({ step: "tls", reason: "TLS scanning was not requested" });
+    degraded.push({
+      step: "tls",
+      reason:
+        "TLS and certificate configuration were not examined. This check " +
+        "read HTTP response headers only, so the transport posture of this " +
+        "host is unknown — not verified clean. A full scan, which requires " +
+        "proving you control the domain, is what tests it.",
+    });
   }
 
   /* -- decide ---------------------------------------------------------- */
+
+  // A scan that observed nothing cannot be scored.
+  //
+  // computeOverallScore([]) is 100 and 100 grades A, which is correct when
+  // every check ran and found nothing — and a lie when no check ran at
+  // all. An unreachable host, a name that does not resolve, or one refused
+  // for pointing at a private address would otherwise come back as a
+  // perfect result with the explanation buried in `degraded`, which is
+  // precisely the "absence of findings presented as a pass" this codebase
+  // refuses to do everywhere else. Nobody reads the footnote under an A.
+  //
+  // Having observed SOMETHING is enough: a host whose headers answered but
+  // whose TLS scan timed out is still scored on its headers, with the gap
+  // recorded. The bar is that at least one probe got an answer.
+  const headersObserved = headerStep.probe?.ok === true;
+  if (!headersObserved && !tlsObserved) {
+    const why = headerStep.degraded?.reason ?? "no probe reached the target";
+    return {
+      ok: false,
+      reason: `Nothing could be measured about ${hostname}: ${why}`,
+    };
+  }
+
   const bounded = capTotalEvidence(dedupeFindings(findings));
 
   const score = computeOverallScore(bounded);
@@ -171,7 +203,9 @@ async function stepHeaders(
   }
 }
 
-async function stepTls(hostname: string): Promise<StepResult & { version: string | null }> {
+async function stepTls(
+  hostname: string,
+): Promise<StepResult & { version: string | null; observed: boolean }> {
   const result = await runTestssl(hostname);
 
   if (!result.ok) {
@@ -181,6 +215,7 @@ async function stepTls(hostname: string): Promise<StepResult & { version: string
     return {
       findings: [],
       version: null,
+      observed: false,
       degraded: {
         step: "tls",
         reason:
@@ -199,6 +234,7 @@ async function stepTls(hostname: string): Promise<StepResult & { version: string
     return {
       findings: [],
       version: result.version,
+      observed: false,
       degraded: {
         step: "tls",
         reason: `TLS scan did not run — the TLS posture of this host is unknown, not verified clean. testssl.sh reported: ${mapped.fatal}`,
@@ -216,6 +252,7 @@ async function stepTls(hostname: string): Promise<StepResult & { version: string
   return {
     findings: mapped.findings,
     version: result.version,
+    observed: true,
     ...(notes.length > 0 ? { degraded: { step: "tls", reason: notes.join(" ") } } : {}),
   };
 }

@@ -15,7 +15,17 @@ import { writeAudit } from "@/lib/audit";
 
 export type ScanAuthorization =
   | { granted: true; domainId: string; hostname: string }
-  | { granted: false; reason: ScanRefusalReason; message: string };
+  | {
+      granted: false;
+      reason: ScanRefusalReason;
+      message: string;
+      /**
+       * Known for every refusal except one the caller invented a domain id
+       * for. The refused ScanResult row records it so the user's history
+       * says WHICH host was refused, not just that something was.
+       */
+      hostname?: string;
+    };
 
 export type ScanRefusalReason =
   | "domain_not_found"
@@ -38,6 +48,7 @@ export async function authorizeScan(args: AuthorizeArgs): Promise<ScanAuthorizat
     message: string,
     targetId: string,
     extra: Record<string, unknown> = {},
+    hostname?: string,
   ): Promise<ScanAuthorization> => {
     await writeAudit({
       actorUserId: args.userId,
@@ -51,7 +62,7 @@ export async function authorizeScan(args: AuthorizeArgs): Promise<ScanAuthorizat
       userAgent: args.userAgent,
       metadata: { reason, ...extra },
     });
-    return { granted: false, reason, message };
+    return { granted: false, reason, message, ...(hostname ? { hostname } : {}) };
   };
 
   if (args.userStatus !== "ACTIVE") {
@@ -87,6 +98,7 @@ export async function authorizeScan(args: AuthorizeArgs): Promise<ScanAuthorizat
       "That domain is not registered.",
       domain.id,
       { hostname: domain.hostname },
+      domain.hostname,
     );
   }
 
@@ -96,6 +108,7 @@ export async function authorizeScan(args: AuthorizeArgs): Promise<ScanAuthorizat
       "Verification for this domain was revoked. Re-verify before scanning.",
       domain.id,
       { hostname: domain.hostname },
+      domain.hostname,
     );
   }
 
@@ -105,6 +118,7 @@ export async function authorizeScan(args: AuthorizeArgs): Promise<ScanAuthorizat
       "Verify ownership of this domain before scanning it.",
       domain.id,
       { hostname: domain.hostname, status: domain.verificationStatus },
+      domain.hostname,
     );
   }
 

@@ -110,6 +110,48 @@ own rules, or by `mapExternalSeverity`, which maps an unrecognized label
 from testssl.sh to MEDIUM rather than trusting it. No target-supplied text
 reaches either function.
 
+### Two kinds of scan, and why the line is where it is
+
+"Scanning" is not one action, and treating it as one forces a choice
+between refusing everything and permitting everything.
+
+| | Full scan | Headers-only check |
+| --- | --- | --- |
+| Requires proven ownership | **yes** | no |
+| What the target sees | one GET, then hundreds of TLS handshakes probing cipher suites, protocol versions and renegotiation | **one** HTTPS GET, body never read |
+| Checks | headers, fingerprint, CVE, TLS | headers, fingerprint, CVE |
+| Endpoint | `POST /api/scans` | `POST /api/scans/public` |
+
+The headers check sends exactly what a browser sends when someone visits
+the page once, and the fingerprint and CVE steps work from that same
+response without generating further traffic. There is no coherent sense in
+which that is an intrusion. The TLS step is active probing, it looks like
+reconnaissance in the target's logs, and it stays behind proof of control.
+
+`includeTls: false` is hard-coded in the public route rather than read from
+the request, so no request body can unlock the TLS step. The two routes are
+kept separate for the same reason: one endpoint with a boolean would mean a
+single code path deciding, from a request field, how much of the scanner to
+unlock.
+
+Three throttles, because this endpoint makes the server send a request on a
+stranger's say-so:
+
+- **Per caller** — 30/hour, and callers must be authenticated, so every
+  request is attributable and every refusal is audited.
+- **Per target** — 6/hour for one hostname across *all* callers. A per-user
+  limit alone would let many accounts aim at one host; this is the half
+  that protects the target rather than the service.
+- **Result reuse** — a completed check is served again for 15 minutes. Ten
+  people checking the same site in that window cost it one request, not
+  ten. The strongest throttle is the one that removes the request entirely.
+
+A headers-only result says so on its face — a badge beside the grade, a
+warning above the explanation, and a `degraded` entry recording that TLS
+was not examined. A host can have excellent headers and badly broken
+transport security, and a grade that does not say which surface it looked
+at is worse than no grade.
+
 ### Why scanned text cannot change a score
 
 The `Finding` type separates the two categories of data structurally.
@@ -539,8 +581,13 @@ the controls it implements and the ones it does not.
 9. **Registration is open.** Any address can create an account. A real
    deployment likely wants an invite or approval step.
 
-10. **Scanning consumes real resources on a third-party host.** Ownership
-    verification is what keeps that legitimate. It is not a substitute for
+10. **A headers-only check still touches a host you do not own.** It is one
+    GET, the same as a browser visit, and Fulcrum throttles per caller, per
+    target, and by reusing recent results — but it is still an outbound
+    request made on someone's behalf, and a determined caller can learn
+    which hosts are reachable from this deployment. Full scans consume real
+    resources on a third-party host, and ownership verification is what
+    keeps those legitimate. It is not a substitute for
     telling your hosting provider what you are doing, and running this
     against infrastructure you do not control is both prohibited by the app
     and, in many jurisdictions, unlawful.

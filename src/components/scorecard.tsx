@@ -53,6 +53,7 @@ export function Scorecard({
   testsslVersion,
   degraded,
   scannedAt,
+  scanType = "FULL",
 }: {
   hostname: string;
   grade: Grade;
@@ -62,6 +63,8 @@ export function Scorecard({
   testsslVersion: string | null;
   degraded: Array<{ step: string; reason: string }>;
   scannedAt: string;
+  /** FULL examined TLS; HEADERS_ONLY did not. */
+  scanType?: "FULL" | "HEADERS_ONLY";
 }) {
   const counts = severityBreakdown(findings);
   const scored = findings.filter((f) => f.severity !== "INFO");
@@ -88,6 +91,9 @@ export function Scorecard({
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
+              {scanType === "HEADERS_ONLY" && (
+                <Badge tone="medium">headers only</Badge>
+              )}
               {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as Severity[])
                 .filter((s) => counts[s] > 0)
                 .map((s) => (
@@ -101,6 +107,17 @@ export function Scorecard({
         </div>
 
         <div className="mt-5 space-y-3 border-t border-line pt-4 text-xs leading-relaxed text-ink-faint">
+          {scanType === "HEADERS_ONLY" && (
+            <p className="text-sev-medium">
+              This was a headers-only check of a host nobody has proved they
+              control, so it made a single request and read the response
+              headers. TLS and certificate configuration were{" "}
+              <strong className="font-semibold">not examined</strong> — this
+              grade describes the HTTP headers and nothing else, and a host
+              with excellent headers can still have badly broken transport
+              security. Verify ownership to run the full scan.
+            </p>
+          )}
           {worst && (
             <p>
               The score is a penalty total: the worst finding counts in full

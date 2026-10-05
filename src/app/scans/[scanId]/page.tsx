@@ -30,6 +30,8 @@ export default async function ScanPage({
     where: { id: scanId, userId: session.id },
     select: {
       id: true,
+      hostname: true,
+      scanType: true,
       status: true,
       findings: true,
       score: true,
@@ -43,7 +45,6 @@ export default async function ScanPage({
       errorMessage: true,
       completedAt: true,
       createdAt: true,
-      domain: { select: { hostname: true } },
     },
   });
 
@@ -54,7 +55,7 @@ export default async function ScanPage({
   if (scan.status !== "COMPLETED") {
     return (
       <AppShell email={session.email} isAdmin={isAdmin} active="dashboard">
-        <Panel title={`Scan of ${scan.domain.hostname}`}>
+        <Panel title={`Scan of ${scan.hostname}`}>
           <p className="text-sm text-ink-muted">
             This scan is <span className="font-mono text-ink">{scan.status.toLowerCase()}</span>.
           </p>
@@ -107,7 +108,8 @@ export default async function ScanPage({
       </Link>
 
       <Scorecard
-        hostname={scan.domain.hostname}
+        hostname={scan.hostname}
+        scanType={scan.scanType}
         grade={(scan.grade ?? "F") as Grade}
         score={scan.score ?? 0}
         findings={findings}

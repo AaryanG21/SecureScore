@@ -107,6 +107,13 @@ export const RATE_LIMITS = {
   // harder than ordinary reads.
   scan: { limit: 10, windowSeconds: 3600 },
   domainVerify: { limit: 10, windowSeconds: 900 },
+  // Headers-only checks of hosts the caller does not own. One HTTPS GET
+  // each, so the cost to any single target is small — but this endpoint
+  // makes the server send a request on a stranger's say-so, so the per-
+  // caller ceiling is what stops it being used as a traffic source. The
+  // per-TARGET ceiling lives in lib/domains/public-scan.ts, because a
+  // per-user limit alone would let many accounts aim at one host.
+  publicScan: { limit: 30, windowSeconds: 3600 },
   // Blanket ceiling applied to every other API route.
   api: { limit: 120, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;

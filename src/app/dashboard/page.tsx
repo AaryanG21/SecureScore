@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { Panel, Stat } from "@/components/ui";
 import { DomainManager } from "@/app/dashboard/domain-manager";
+import { PublicCheck } from "@/app/dashboard/public-check";
 import { ScanLauncher } from "@/app/dashboard/scan-launcher";
 import {
   DNS_CHALLENGE_PREFIX,
@@ -45,11 +46,12 @@ export default async function DashboardPage() {
       take: 10,
       select: {
         id: true,
+        hostname: true,
+        scanType: true,
         status: true,
         grade: true,
         score: true,
         createdAt: true,
-        domain: { select: { hostname: true } },
       },
     }),
   ]);
@@ -66,7 +68,7 @@ export default async function DashboardPage() {
         <Stat
           label="Latest grade"
           value={scans.find((s) => s.grade)?.grade ?? "—"}
-          hint={scans[0]?.domain.hostname ?? "no scans yet"}
+          hint={scans[0]?.hostname ?? "no scans yet"}
         />
       </div>
 
@@ -101,9 +103,13 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-6">
+        <PublicCheck />
+      </div>
+
+      <div className="mt-6">
         <Panel
           title="Scan history"
-          description="Scorecards for domains you have verified."
+          description="Full scans of domains you verified, and headers-only checks."
         >
           {scans.length === 0 ? (
             <p className="text-sm text-ink-muted">
@@ -129,8 +135,16 @@ export default async function DashboardPage() {
                         href={`/scans/${scan.id}`}
                         className="text-signal hover:underline"
                       >
-                        {scan.domain.hostname}
+                        {scan.hostname}
                       </Link>
+                      {scan.scanType === "HEADERS_ONLY" && (
+                        <span
+                          className="ml-2 rounded border border-line-bright px-1.5 py-0.5 text-[10px] tracking-wide text-ink-faint uppercase"
+                          title="Headers only — TLS was not examined"
+                        >
+                          headers
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 text-ink-muted">{scan.status}</td>
                     <td className="py-2 font-mono text-ink">{scan.grade ?? "—"}</td>

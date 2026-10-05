@@ -56,6 +56,10 @@ export async function POST(request: NextRequest) {
       data: {
         domainId,
         userId: guard.value.id,
+        // Known unless the caller invented a domain id, in which case
+        // there is genuinely nothing truthful to record.
+        hostname: authorization.hostname ?? "(unknown domain)",
+        scanType: "FULL",
         status: "REFUSED",
         budgetLimit: budget,
         refusalReason: authorization.reason,
@@ -73,6 +77,8 @@ export async function POST(request: NextRequest) {
     data: {
       domainId: authorization.domainId,
       userId: guard.value.id,
+      hostname: authorization.hostname,
+      scanType: "FULL",
       status: "RUNNING",
       budgetLimit: budget,
       startedAt: new Date(),

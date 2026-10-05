@@ -73,6 +73,14 @@ export const AUDIT_ACTIONS = [
   "DOMAIN_REMOVED",
   // Scans
   "SCAN_REQUESTED",
+  // Headers-only checks of hosts the caller does not own. Kept distinct
+  // from SCAN_* so the log can answer "what have we been pointed at that
+  // nobody proved they owned" without inspecting metadata on every row —
+  // which is the question an operator asks when a target complains.
+  "PUBLIC_SCAN_REQUESTED",
+  "PUBLIC_SCAN_COMPLETED",
+  "PUBLIC_SCAN_FAILED",
+  "PUBLIC_SCAN_REFUSED",
   "SCAN_REFUSED_UNVERIFIED_DOMAIN",
   "SCAN_REFUSED_NOT_OWNER",
   "SCAN_COMPLETED",

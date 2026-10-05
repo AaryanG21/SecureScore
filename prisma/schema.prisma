@@ -39,6 +39,19 @@ enum DomainVerificationMethod {
   HTTP_WELL_KNOWN
 }
 
+// What a scan was permitted to do, which is a different question from
+// whether it succeeded.
+enum ScanType {
+  // Every check, including testssl.sh. Requires proven ownership: it opens
+  // hundreds of handshakes against the target and is active probing by any
+  // reasonable definition.
+  FULL
+  // One HTTPS GET, and the checks derivable from that single response.
+  // Permitted against any public host because the network footprint is
+  // indistinguishable from a browser visiting the page once.
+  HEADERS_ONLY
+}
+
 enum ScanStatus {
   QUEUED
   RUNNING
@@ -139,11 +152,23 @@ model Domain {
 }
 
 model ScanResult {
-  id       String @id @default(cuid())
-  domainId String
-  userId   String
+  id     String @id @default(cuid())
+  userId String
 
-  status ScanStatus @default(QUEUED)
+  // Null for a HEADERS_ONLY scan, which by definition has no registered
+  // domain behind it.
+  domainId String?
+
+  // The hostname as it was scanned. Denormalized deliberately, and not
+  // only because a headers-only scan has no Domain row to join to: it is
+  // the forensic fact. Reading it back through the relation would show
+  // whatever that domain row says now, or nothing once it is removed —
+  // which is exactly what happened to the first scan of this project's own
+  // site when its registration was replaced.
+  hostname String
+
+  scanType ScanType   @default(FULL)
+  status   ScanStatus @default(QUEUED)
 
   // Normalized Finding[] produced by the agent. Untrusted scanned text
   // lives inside these objects and is only ever rendered as data.
@@ -175,11 +200,12 @@ model ScanResult {
   completedAt DateTime?
   createdAt   DateTime  @default(now())
 
-  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([domainId, createdAt])
   @@index([userId, createdAt])
+  @@index([hostname, createdAt])
   // For the stalled-scan reaper, which looks for RUNNING rows older than
   // a threshold. Without it that is a sequential scan on every boot.
   @@index([status, startedAt])

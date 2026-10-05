@@ -98,6 +98,19 @@ export const addDomainSchema = z.object({
   method: z.enum(["DNS_TXT", "HTTP_WELL_KNOWN"]).default("DNS_TXT"),
 });
 
+/**
+ * A headers-only check takes a hostname rather than a registered domain id.
+ *
+ * It goes through the same hostnameSchema as registration, so the same
+ * canonicalization and the same refusals apply — no scheme, no port, no
+ * path, no IP literal, no internal suffix. Nothing here is relaxed because
+ * the target is not owned by the caller; if anything that matters more.
+ */
+export const publicScanRequestSchema = z.object({
+  hostname: hostnameSchema,
+  budget: z.coerce.number().int().min(1).max(1000),
+});
+
 export const scanRequestSchema = z.object({
   domainId: z.string().min(1).max(64),
   /**
