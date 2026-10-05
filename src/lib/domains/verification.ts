@@ -2,6 +2,7 @@ import "server-only";
 import { resolveTxt } from "node:dns/promises";
 import { randomToken } from "@/lib/crypto";
 import { normalizeHostname } from "@/lib/validation/hostname";
+import { safeHttpsGet } from "@/lib/net/safe-request";
 
 /**
  * Domain ownership verification.
@@ -83,11 +84,14 @@ export async function verifyDnsTxt(
 /**
  * Looks for the challenge token in a well-known file.
  *
- * Hardening on this fetch, because it is the one place the app makes an
- * outbound request to a user-supplied host:
+ * Hardening on this request, because it is the one place the app reaches
+ * out to a host the caller named BEFORE that host has been proven theirs:
  *   - the hostname is re-normalized here, not trusted from the caller
  *   - redirects are not followed (a redirect to 169.254.169.254 is the
  *     classic SSRF pivot to cloud instance metadata)
+ *   - the name is resolved and non-public answers are refused, and the
+ *     connection is pinned to the vetted address so a rebinding answer
+ *     cannot land somewhere else — see lib/net/safe-request.ts
  *   - there is a hard timeout and a response size cap
  *   - only https is attempted
  */
@@ -99,85 +103,54 @@ export async function verifyHttpWellKnown(
   if (!normalized.ok) return { verified: false, reason: normalized.reason };
 
   const url = `https://${normalized.hostname}${HTTP_CHALLENGE_PATH}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
-      headers: { "User-Agent": "Fulcrum-DomainVerification/1.0" },
-      cache: "no-store",
-    });
+  const result = await safeHttpsGet({
+    hostname: normalized.hostname,
+    path: HTTP_CHALLENGE_PATH,
+    timeoutMs: HTTP_TIMEOUT_MS,
+    maxBytes: MAX_RESPONSE_BYTES,
+    headers: { "User-Agent": "Fulcrum-DomainVerification/1.0" },
+  });
 
-    if (response.status >= 300 && response.status < 400) {
-      return {
-        verified: false,
-        reason:
-          "The challenge URL redirected. Serve the file directly at that path — redirects are not followed.",
-      };
+  if (!result.ok) {
+    if (result.kind === "refused") {
+      // Said plainly: it is the caller's own DNS that points somewhere it
+      // should not, and they are the one person who can fix it.
+      return { verified: false, reason: result.reason };
     }
-
-    if (!response.ok) {
-      return { verified: false, reason: `Challenge URL returned HTTP ${response.status}.` };
-    }
-
-    const body = await readCapped(response, MAX_RESPONSE_BYTES);
-    if (body === null) {
-      return { verified: false, reason: "Challenge file is too large." };
-    }
-
-    if (body.trim() !== expectedToken) {
-      return {
-        verified: false,
-        reason: "Challenge file did not contain the expected token.",
-      };
-    }
-
-    return { verified: true, method: "HTTP_WELL_KNOWN", evidence: url };
-  } catch (error) {
-    const aborted = error instanceof Error && error.name === "AbortError";
     return {
       verified: false,
-      reason: aborted
-        ? "Challenge URL timed out."
-        : "Could not reach the challenge URL over HTTPS.",
+      reason:
+        result.kind === "timeout"
+          ? "Challenge URL timed out."
+          : "Could not reach the challenge URL over HTTPS.",
     };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** Reads at most `limit` bytes, returning null if the body exceeds it. */
-async function readCapped(response: Response, limit: number): Promise<string | null> {
-  const reader = response.body?.getReader();
-  if (!reader) return "";
-
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
   }
 
-  return new TextDecoder().decode(
-    chunks.reduce<Uint8Array>((acc, chunk) => {
-      const merged = new Uint8Array(acc.length + chunk.length);
-      merged.set(acc);
-      merged.set(chunk, acc.length);
-      return merged;
-    }, new Uint8Array()),
-  );
+  if (result.status >= 300 && result.status < 400) {
+    return {
+      verified: false,
+      reason:
+        "The challenge URL redirected. Serve the file directly at that path — redirects are not followed.",
+    };
+  }
+
+  if (result.status < 200 || result.status >= 300) {
+    return { verified: false, reason: `Challenge URL returned HTTP ${result.status}.` };
+  }
+
+  if (result.bodyTooLarge || result.body === undefined) {
+    return { verified: false, reason: "Challenge file is too large." };
+  }
+
+  if (result.body.trim() !== expectedToken) {
+    return {
+      verified: false,
+      reason: "Challenge file did not contain the expected token.",
+    };
+  }
+
+  return { verified: true, method: "HTTP_WELL_KNOWN", evidence: url };
 }
 
 export async function runVerification(

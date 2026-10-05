@@ -1,5 +1,6 @@
 import "server-only";
 import { normalizeHostname } from "@/lib/validation/hostname";
+import { safeHttpsGet } from "@/lib/net/safe-request";
 import { sanitizeScannedText } from "@/lib/agent/sanitize";
 import { finalizeFinding } from "@/lib/agent/scoring";
 import type { Finding, Severity } from "@/lib/agent/types";
@@ -35,42 +36,38 @@ export async function probeHeaders(hostname: string): Promise<HeaderProbe> {
   const normalized = normalizeHostname(hostname);
   if (!normalized.ok) return { ok: false, reason: normalized.reason };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  // safeHttpsGet resolves the name, refuses non-public answers and pins the
+  // connection to the address it vetted. Omitting maxBytes means the body
+  // is never read: only headers are needed, and not reading it means a
+  // target cannot feed us megabytes of content.
+  const result = await safeHttpsGet({
+    hostname: normalized.hostname,
+    path: "/",
+    timeoutMs: FETCH_TIMEOUT_MS,
+    headers: {
+      "User-Agent": "Fulcrum-Scanner/1.0 (+security scorecard; authorized scan)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+  });
 
-  try {
-    const response = await fetch(`https://${normalized.hostname}/`, {
-      method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Fulcrum-Scanner/1.0 (+security scorecard; authorized scan)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      cache: "no-store",
-    });
-
-    // The body is deliberately never read: we need headers only, and not
-    // reading it means a target cannot feed us megabytes of content.
-    await response.body?.cancel();
-
-    return {
-      ok: true,
-      status: response.status,
-      headers: response.headers,
-      redirected: response.status >= 300 && response.status < 400,
-    };
-  } catch (error) {
-    const aborted = error instanceof Error && error.name === "AbortError";
+  if (!result.ok) {
     return {
       ok: false,
-      reason: aborted
-        ? "The target did not respond within the timeout"
-        : "Could not establish an HTTPS connection to the target",
+      reason:
+        result.kind === "timeout"
+          ? "The target did not respond within the timeout"
+          : result.kind === "refused"
+            ? result.reason
+            : "Could not establish an HTTPS connection to the target",
     };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return {
+    ok: true,
+    status: result.status,
+    headers: result.headers,
+    redirected: result.status >= 300 && result.status < 400,
+  };
 }
 
 interface HeaderRule {
