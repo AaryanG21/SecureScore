@@ -3,6 +3,19 @@ import { EnrollFlow } from "@/app/enroll/enroll-flow";
 
 export const metadata = { title: "Two-factor setup — Fulcrum" };
 
+// Rendered per request, not prerendered.
+//
+// The CSP in src/proxy.ts carries a per-request nonce, and `'strict-dynamic'`
+// makes browsers ignore the `'self'` source expression for scripts. A page
+// prerendered at build time has no request and therefore no nonce, so its
+// script tags are emitted bare and every one of them is blocked — the page
+// ships with no working JavaScript at all. That failure is invisible in
+// `next dev`, which does not prerender, and it only appears in a production
+// build. Opting out of static generation is what keeps the nonce and the
+// markup on the same request.
+export const dynamic = "force-dynamic";
+
+
 export default function EnrollPage() {
   return (
     <div className="flex min-h-screen flex-col">

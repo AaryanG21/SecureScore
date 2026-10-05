@@ -20,10 +20,24 @@ import { securityHeaders } from "@/lib/security/headers";
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV === "development";
-  const isHttps = request.nextUrl.protocol === "https:";
+
+  // HSTS is decided from APP_ORIGIN, not from the request protocol.
+  //
+  // The deployment topology this project recommends terminates TLS at a
+  // reverse proxy and forwards plain http to the app on loopback, so
+  // `request.nextUrl.protocol` is "http:" on every request in production.
+  // Deriving HSTS from it therefore dropped the header in precisely the
+  // configuration the README tells you to run. APP_ORIGIN is validated at
+  // boot and is the authoritative statement of how users reach this
+  // deployment, which is the question HSTS actually asks — and it is the
+  // same source `isSecureContext()` in lib/auth/cookies.ts uses for the
+  // cookie Secure flag, so the two can no longer disagree.
+  //
+  // Read raw rather than through getEnv() because Proxy may be bundled for
+  // a runtime that cannot resolve a "server-only" module.
+  const isHttps = (process.env.APP_ORIGIN ?? "").startsWith("https://");
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
 
   // Strip any client-supplied spoof of headers we generate ourselves.
   requestHeaders.delete("x-fulcrum-user");
