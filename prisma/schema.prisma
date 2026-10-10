@@ -88,6 +88,20 @@ model User {
   passwordChangedAt DateTime @default(now())
   lastLoginAt       DateTime?
 
+  // Consent record. Nullable because accounts created before the gate
+  // existed have no record, and inventing a timestamp for them would be
+  // worse than admitting there isn't one.
+  //
+  // Both are set by the same checkbox at registration — one affirmative
+  // action covering two statements — but they are stored separately so a
+  // later re-acceptance of changed Terms does not overwrite the record of
+  // when the age was confirmed.
+  //
+  // No date of birth is collected. Confirming the threshold is what the
+  // purpose requires; the exact date would be more data than is needed.
+  ageConfirmedAt   DateTime?
+  termsAcceptedAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
@@ -12,6 +13,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export function RegisterForm() {
     setBusy(true);
     const result = await apiFetch<{ status: string }>("/api/auth/register", {
       method: "POST",
-      body: { email, password },
+      body: { email, password, acceptedTerms },
     });
     setBusy(false);
 
@@ -92,7 +94,48 @@ export function RegisterForm() {
           />
         </Field>
 
-        <button type="submit" className={`${buttonClass} w-full`} disabled={busy}>
+        {/*
+          The age and terms confirmation.
+
+          Unticked by default and `required`, so the affirmative action is
+          the user's. A pre-ticked box records nothing — it captures the
+          default, not a decision — and under the DPDP Act consent has to be
+          a clear affirmative action. The server re-validates this with
+          z.literal(true), so the record does not depend on the UI having
+          rendered correctly.
+        */}
+        <label className="flex items-start gap-2.5 text-sm text-ink-muted">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-signal"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            required
+          />
+          <span>
+            I am 18 or older and I accept the{" "}
+            <Link href="/terms" className="text-signal hover:underline">
+              Terms of service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="text-signal hover:underline">
+              Privacy policy
+            </Link>
+            .
+          </span>
+        </label>
+
+        {fieldErrors.acceptedTerms?.[0] && (
+          <p role="alert" className="text-xs text-sev-critical">
+            {fieldErrors.acceptedTerms[0]}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className={`${buttonClass} w-full`}
+          disabled={busy || !acceptedTerms}
+        >
           {busy ? "Creating…" : "Create account"}
         </button>
 

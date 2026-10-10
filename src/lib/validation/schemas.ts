@@ -40,6 +40,18 @@ export const backupCodeSchema = z
 export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
+  /**
+   * The age and terms confirmation, validated on the server.
+   *
+   * `z.literal(true)` rather than `z.boolean()`: a boolean would accept
+   * false and leave the route to remember to check it. A checkbox the
+   * client can simply omit is not a consent record, and a consent record
+   * that depends on the UI having rendered correctly is not one either.
+   */
+  acceptedTerms: z.literal(true, {
+    message:
+      "You must confirm you are 18 or older and accept the Terms and Privacy Policy.",
+  }),
 });
 
 export const loginSchema = z.object({

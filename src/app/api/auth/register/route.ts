@@ -67,8 +67,21 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
 
   const passwordHash = await hashPassword(password);
 
+  // One timestamp for one affirmative action, written to both columns.
+  // The checkbox is validated by the schema above as z.literal(true), so
+  // reaching here means it was ticked — the record is of something that
+  // actually happened, not of a default.
+  const consentedAt = new Date();
+
   const user = await prisma.user.create({
-    data: { email, passwordHash, status: "PENDING_2FA", role: "USER" },
+    data: {
+      email,
+      passwordHash,
+      status: "PENDING_2FA",
+      role: "USER",
+      ageConfirmedAt: consentedAt,
+      termsAcceptedAt: consentedAt,
+    },
     select: { id: true },
   });
 
@@ -80,7 +93,11 @@ export async function POST(request: NextRequest) { const meta = getRequestMeta(r
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
     requestId: meta.requestId,
-    metadata: { outcome: "created" },
+    metadata: {
+      outcome: "created",
+      ageConfirmed: true,
+      termsAcceptedAt: consentedAt.toISOString(),
+    },
   });
 
   const pendingToken = await signMfaPendingToken(user.id);
