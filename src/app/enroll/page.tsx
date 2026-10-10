@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/site-footer";
 import { EnrollFlow } from "@/app/enroll/enroll-flow";
 
 export const metadata = { title: "Two-factor setup — Fulcrum" };
@@ -35,6 +36,8 @@ export default function EnrollPage() {
           <EnrollFlow />
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

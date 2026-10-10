@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { SiteFooter } from "@/components/site-footer";
 
 // Rendered per request, not prerendered.
 //
@@ -23,24 +24,43 @@ export const dynamic = "force-dynamic";
  * claim the implementation can actually support.
  */
 
+/**
+ * Figures for the hero illustration. A worked example, labelled as such on
+ * the page — these are the shapes the planner really produces (cheap fixes
+ * first, by risk removed per effort point), with no claim to be any
+ * particular site's result.
+ */
+const EXAMPLE_PLAN = [
+  { title: "No clickjacking protection", effort: 1, removes: 11 },
+  { title: "Certificate near expiry", effort: 2, removes: 14 },
+  { title: "MIME sniffing not disabled", effort: 1, removes: 4 },
+  { title: "Obsolete cipher suites", effort: 2, removes: 4 },
+] as const;
+
 const CAPABILITIES = [
   {
     title: "Header & transport posture",
-    body: "HSTS, CSP, frame options, cookie flags, and the TLS stack — protocols, ciphers, and certificate chain — checked against current guidance.",
+    body: "Eight header checks — HSTS, CSP, frame options, MIME sniffing, referrer policy, permissions policy, version disclosure and cookie flags. TLS, including protocols, ciphers and the certificate chain, is examined by testssl.sh 3.2.4, pinned and run locally.",
   },
   {
     title: "Version-aware CVE context",
-    body: "Fingerprinted software versions are cross-referenced with CVE and EPSS data, so a finding carries its real-world exploitation likelihood, not just a CVSS number.",
+    body: "Where a server advertises its version, that version is matched against a curated set of 16 CVEs covering common web server software, carrying EPSS exploitation likelihood rather than CVSS alone. It is a snapshot, not a vulnerability database, and every result says so.",
   },
   {
     title: "Budget-aware remediation",
-    body: "Set a fix-effort budget. The agent ranks remediations by risk reduced per unit of effort and shows the reasoning behind the order it chose.",
+    body: "Set a fix-effort budget. The agent ranks remediations by risk reduced per unit of effort and shows the reasoning behind the order it chose — including when it defers the worst finding because three cheaper ones remove more risk.",
   },
   {
-    title: "Scans only what you own",
-    body: "Every hostname must pass a DNS or well-known-file ownership challenge before it can be scanned. Unverified targets are refused and the refusal is logged.",
+    title: "Probing requires proof of ownership",
+    body: "A headers check is one request, so it runs against any public site. The TLS scan opens hundreds of connections, so it runs only against a domain you have verified by DNS or a well-known file. Refusals are logged.",
   },
 ];
+
+export const metadata = {
+  title: "Fulcrum — know what to fix first",
+  description:
+    "Grade any website's security headers in seconds, or verify a domain you control for a full TLS scan. Returns a remediation plan ranked by risk removed per unit of effort, with the reasoning shown.",
+};
 
 export default function Home() {
   return (
@@ -81,10 +101,11 @@ export default function Home() {
                 <span className="text-signal">within the effort you have.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg text-ink-muted">
-                Fulcrum scans a domain you have proven you own, grades its
-                security posture from A to F, and returns a prioritized
-                remediation plan sized to a fix-effort budget you set — with the
-                reasoning shown, not just a number.
+                Fulcrum grades a site&rsquo;s security posture from A to F and
+                returns a remediation plan sized to a fix-effort budget you
+                set — with the reasoning shown, not just a number. Check any
+                site&rsquo;s headers in a second; prove you control a domain to
+                run the full scan, including TLS.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
@@ -100,31 +121,61 @@ export default function Home() {
                   Sign in
                 </Link>
               </div>
-              <p className="mt-4 font-mono text-xs text-ink-faint">
-                2FA required on every account · scans restricted to verified domains
+              <p className="mt-4 font-mono text-xs text-ink-muted">
+                2FA required on every account · TLS scanning restricted to
+                verified domains
               </p>
             </div>
 
             {/*
-              PLACEHOLDER IMAGE SLOT — hero artwork to be generated
-              separately (Higgsfield) and dropped in at /public/hero.png.
-              Replace this whole block with:
-                <Image src="/hero.png" alt="" width={720} height={540} priority />
-              Keep the aspect ratio close to 4:3 so the layout does not shift.
+              An illustration of the product's actual output, built from the
+              same tokens the real scorecard uses. Deliberately not a
+              screenshot and not an image file: nothing to download, nothing
+              to keep in sync with the UI, and no layout shift. The figures
+              are a worked example and are labelled as one — a marketing page
+              showing an invented "real" result would be the kind of claim
+              this project refuses to make elsewhere.
             */}
-            <div
-              aria-hidden
-              className="flex aspect-[4/3] items-center justify-center rounded-lg border border-dashed border-line-bright bg-surface/60"
-            >
-              <div className="text-center">
-                <p className="font-mono text-xs tracking-widest text-ink-faint uppercase">
-                  Hero image slot
-                </p>
-                <p className="mt-2 text-sm text-ink-faint">
-                  /public/hero.png · 4:3
+            <figure className="m-0">
+              <div className="aspect-[4/3] rounded-lg border border-line bg-surface p-6">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-sev-high/50 bg-sev-high/10 font-mono text-3xl font-bold text-sev-high">
+                    D
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm text-ink">
+                      example.com
+                    </p>
+                    <p className="mt-0.5 text-xs text-ink-muted">
+                      Score 50/100 · 10 findings
+                    </p>
+                  </div>
+                </div>
+
+                <ol className="mt-5 space-y-2">
+                  {EXAMPLE_PLAN.map((step) => (
+                    <li
+                      key={step.title}
+                      className="flex items-baseline justify-between gap-3 border-b border-line/60 pb-2 text-xs last:border-0"
+                    >
+                      <span className="truncate text-ink-muted">
+                        {step.title}
+                      </span>
+                      <span className="shrink-0 font-mono text-ink-muted">
+                        {step.effort}pt → &minus;{step.removes}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="mt-4 font-mono text-[11px] tracking-wide text-ink-muted">
+                  budget 15 · 14 used · 3 deferred
                 </p>
               </div>
-            </div>
+              <figcaption className="mt-2 text-center text-xs text-ink-muted">
+                Example output. Not a real site&rsquo;s result.
+              </figcaption>
+            </figure>
           </div>
         </section>
 
@@ -165,12 +216,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-xs text-ink-faint">
-          <span className="font-mono">Fulcrum · defence in depth, honestly described</span>
-          <span>Scan only domains you own and have verified.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

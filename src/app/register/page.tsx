@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/site-footer";
 import { RegisterForm } from "@/app/register/register-form";
 
 export const metadata = { title: "Create account — Fulcrum" };
@@ -41,6 +42,8 @@ export default function RegisterPage() {
           </p>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

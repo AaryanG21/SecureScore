@@ -69,7 +69,28 @@ body {
 }
 
 /* A faint grid, evoking a console backdrop without costing an image. */
+/*
+ * Console grid backdrop.
+ *
+ * The mask lives on a pseudo-element, not on .grid-backdrop itself. A
+ * mask-image set on the element applies to the element AND ITS CHILDREN —
+ * it does not fade only the background it was written for. Applied
+ * directly, it faded the hero paragraph, the call-to-action row and the
+ * lower half of the illustration to near-invisibility, which no contrast
+ * calculation catches because the computed colour values are perfectly
+ * fine and the rendered opacity is not.
+ */
 .grid-backdrop {
+  position: relative;
+  isolation: isolate;
+}
+
+.grid-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     linear-gradient(to right, rgba(44, 58, 75, 0.35) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(44, 58, 75, 0.35) 1px, transparent 1px);
@@ -85,4 +106,90 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Legal documents.
+ *
+ * These pages are long-form prose rather than console UI, so they get
+ * reading-width measure, real heading scale and generous leading. Scoped to
+ * .legal-prose so nothing here can leak into the application chrome.
+ * ------------------------------------------------------------------------- */
+.legal-prose {
+  color: var(--color-ink-muted);
+  line-height: 1.7;
+}
+
+.legal-prose h1 {
+  color: var(--color-ink);
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.legal-prose h2 {
+  color: var(--color-ink);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose h3 {
+  color: var(--color-ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-prose p,
+.legal-prose ul,
+.legal-prose ol {
+  margin-top: 0.875rem;
+}
+
+.legal-prose ul,
+.legal-prose ol {
+  padding-left: 1.25rem;
+}
+
+.legal-prose ul { list-style: disc; }
+.legal-prose ol { list-style: decimal; }
+.legal-prose li { margin-top: 0.4rem; }
+
+.legal-prose strong { color: var(--color-ink); font-weight: 600; }
+
+.legal-prose a {
+  color: var(--color-signal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--color-ink);
+}
+
+.legal-prose table {
+  width: 100%;
+  margin-top: 1.25rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.legal-prose th,
+.legal-prose td {
+  border: 1px solid var(--color-line);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-prose th {
+  color: var(--color-ink);
+  font-weight: 600;
+  background: var(--color-surface);
 }

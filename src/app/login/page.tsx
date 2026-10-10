@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/site-footer";
 import { LoginFlow } from "@/app/login/login-flow";
 
 export const metadata = { title: "Sign in — Fulcrum" };
@@ -41,6 +42,8 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
