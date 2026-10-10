@@ -7,6 +7,7 @@ import { countUnusedBackupCodes } from "@/lib/auth/totp";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Panel } from "@/components/ui";
 import { ChangePasswordForm } from "@/app/account/change-password-form";
+import { DataControls } from "@/app/account/data-controls";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Account — Fulcrum" };
@@ -90,6 +91,8 @@ export default async function AccountPage() {
         >
           <ChangePasswordForm />
         </Panel>
+
+        <DataControls />
 
         <Panel
           title="Recent sign-in activity"

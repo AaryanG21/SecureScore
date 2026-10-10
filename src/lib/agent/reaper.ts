@@ -30,6 +30,34 @@ export function stalledThresholdMs(): number {
   return getEnv().TESTSSL_TIMEOUT_MS + OTHER_STEPS_MARGIN_MS;
 }
 
+/**
+ * Removes refresh-token rows that can no longer authenticate anything.
+ *
+ * A row whose expiry has passed, or that was revoked, is dead credential
+ * material: it cannot mint a session, and the reuse-detection it supported
+ * only matters while the family is live. What it still carries is an IP
+ * address and a user-agent string, which is personal data kept for no
+ * remaining purpose — the storage-limitation principle applied rather than
+ * merely written into the policy.
+ *
+ * A grace period after expiry keeps recently-rotated rows around long
+ * enough for reuse detection to still fire on a token stolen just before
+ * it expired.
+ */
+const REVOKED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function pruneDeadSessions(now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - REVOKED_GRACE_MS);
+
+  const { count } = await prisma.refreshToken.deleteMany({
+    where: {
+      OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }],
+    },
+  });
+
+  return count;
+}
+
 export async function reapStalledScans(now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - stalledThresholdMs());
 

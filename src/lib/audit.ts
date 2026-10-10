@@ -59,6 +59,11 @@ export const AUDIT_ACTIONS = [
   // session looks like — indistinguishable from ordinary use unless you
   // opened the metadata of every row.
   "PASSWORD_CHANGE_REJECTED",
+  // Erasure. Recorded in the append-only log precisely because the row it
+  // describes is gone — without this, an account deletion would be the one
+  // significant event that leaves no trace at all.
+  "ACCOUNT_DELETED",
+  "ACCOUNT_DATA_EXPORTED",
   "TWO_FACTOR_ENROLLED",
   "REAUTH_SUCCESS",
   "REAUTH_FAILURE",

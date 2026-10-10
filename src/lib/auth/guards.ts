@@ -163,15 +163,16 @@ export async function requireAdmin(
 }
 
 /**
- * Requires ADMIN *and* a re-authentication performed within
- * REAUTH_TTL_SECONDS. Used for destructive admin actions so that a
- * walked-away-from session cannot be used to suspend users.
+ * Consumes a step-up re-authentication for an already-authenticated user.
+ *
+ * Shared by the admin guard and by irreversible actions on a user's own
+ * account, because "confirm who you are before something you cannot undo"
+ * is the same requirement in both cases — the only difference is whose
+ * data is at stake.
  */
-export async function requireAdminWithReauth(
-  request: Request,
-  options: GuardOptions = {},
+async function consumeReauth(
+  result: GuardResult<SessionUser>,
 ): Promise<GuardResult<SessionUser>> {
-  const result = await requireAdmin(request, options);
   if (!result.ok) return result;
 
   const token = await readCookie(REAUTH_COOKIE);
@@ -207,4 +208,31 @@ export async function requireAdminWithReauth(
   await clearAuthCookie(REAUTH_COOKIE);
 
   return result;
+}
+
+/**
+ * Requires ADMIN *and* a re-authentication performed within
+ * REAUTH_TTL_SECONDS. Used for destructive admin actions so that a
+ * walked-away-from session cannot be used to suspend users.
+ */
+export async function requireAdminWithReauth(
+  request: Request,
+  options: GuardOptions = {},
+): Promise<GuardResult<SessionUser>> {
+  return consumeReauth(await requireAdmin(request, options));
+}
+
+/**
+ * Requires a signed-in user *and* a fresh re-authentication.
+ *
+ * For irreversible actions on one's own account — deleting it, principally.
+ * A session left open on an unlocked laptop should not be enough to destroy
+ * an account, and unlike a password change there is nothing to undo
+ * afterwards.
+ */
+export async function requireUserWithReauth(
+  request: Request,
+  options: GuardOptions = {},
+): Promise<GuardResult<SessionUser>> {
+  return consumeReauth(await requireUser(request, options));
 }

@@ -35,11 +35,18 @@ export async function register(): Promise<void> {
   // moment to clear them. It must not be able to prevent startup: a
   // database that is not reachable yet is a reason to come up and serve
   // the readiness probe a failure, not a reason to crash-loop.
-  const { reapStalledScans } = await import("@/lib/agent/reaper");
+  const { pruneDeadSessions, reapStalledScans } = await import("@/lib/agent/reaper");
   try {
     const reaped = await reapStalledScans();
     if (reaped > 0) {
       log.warn("marked stalled scans as failed at startup", { count: reaped });
+    }
+
+    // Expired and revoked session rows hold an IP and a user-agent for no
+    // remaining purpose. Nothing was removing them.
+    const pruned = await pruneDeadSessions();
+    if (pruned > 0) {
+      log.info("pruned dead session records at startup", { count: pruned });
     }
   } catch (error) {
     log.error("could not reconcile stalled scans at startup", {
