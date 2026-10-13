@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { SiteFooter } from "@/components/site-footer";
+import { Logo } from "@/components/logo";
+import { Chip, InfoCircle, KeyLock, Scale, ShieldCheck } from "@/components/icons";
 
 // Rendered per request, not prerendered.
 //
@@ -39,21 +41,38 @@ const EXAMPLE_PLAN = [
 
 const CAPABILITIES = [
   {
+    icon: ShieldCheck,
     title: "Header & transport posture",
     body: "Eight header checks — HSTS, CSP, frame options, MIME sniffing, referrer policy, permissions policy, version disclosure and cookie flags. TLS, including protocols, ciphers and the certificate chain, is examined by testssl.sh 3.2.4, pinned and run locally.",
   },
   {
+    icon: Chip,
     title: "Version-aware CVE context",
     body: "Where a server advertises its version, that version is matched against a curated set of 16 CVEs covering common web server software, carrying EPSS exploitation likelihood rather than CVSS alone. It is a snapshot, not a vulnerability database, and every result says so.",
   },
   {
+    icon: Scale,
     title: "Budget-aware remediation",
     body: "Set a fix-effort budget. The agent ranks remediations by risk reduced per unit of effort and shows the reasoning behind the order it chose — including when it defers the worst finding because three cheaper ones remove more risk.",
   },
   {
+    icon: KeyLock,
     title: "Probing requires proof of ownership",
     body: "A headers check is one request, so it runs against any public site. The TLS scan opens hundreds of connections, so it runs only against a domain you have verified by DNS or a well-known file. Refusals are logged.",
   },
+];
+
+/**
+ * The disclaimers, as three separate statements rather than one paragraph.
+ *
+ * The wording is unchanged — this is the most important copy on the page and
+ * was the least readable thing on it, buried in an eight-line block that the
+ * eye slides straight past.
+ */
+const NOT_CLAIMS = [
+  "A passing grade means the checks Fulcrum runs did not find a problem. It is not a guarantee that a site is secure, and no tool — this one included — can offer that.",
+  "Fulcrum inspects what is reachable from the outside: headers, TLS configuration, and version fingerprints.",
+  "It does not review your application logic, your dependencies, your infrastructure, or your people. Treat the scorecard as one input among several.",
 ];
 
 export const metadata = {
@@ -68,7 +87,7 @@ export default function Home() {
       <header className="border-b border-line">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <span aria-hidden className="block h-4 w-4 rotate-45 border-2 border-signal" />
+            <Logo />
             <span className="font-mono text-sm font-semibold tracking-widest text-ink uppercase">
               Fulcrum
             </span>
@@ -189,7 +208,10 @@ export default function Home() {
                 key={item.title}
                 className="rounded-lg border border-line bg-surface p-5"
               >
-                <h3 className="text-base font-semibold text-ink">{item.title}</h3>
+                <h3 className="flex items-center gap-2.5 text-base font-semibold text-ink">
+                  <item.icon className="h-5 w-5 shrink-0 text-signal" />
+                  {item.title}
+                </h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-muted">
                   {item.body}
                 </p>
@@ -203,15 +225,16 @@ export default function Home() {
             <h2 className="font-mono text-xs tracking-widest text-ink-faint uppercase">
               What this is not
             </h2>
-            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-ink-muted">
-              A passing grade here means the checks Fulcrum runs did not find a
-              problem. It is not a guarantee that a site is secure, and no tool
-              — this one included — can offer that. Fulcrum inspects what is
-              reachable from the outside: headers, TLS configuration, and
-              version fingerprints. It does not review your application logic,
-              your dependencies, your infrastructure, or your people. Treat the
-              scorecard as one input among several.
-            </p>
+            <ul className="mt-4 max-w-3xl space-y-3">
+              {NOT_CLAIMS.map((claim) => (
+                <li key={claim} className="flex gap-2.5">
+                  <InfoCircle className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
+                  <span className="text-sm leading-relaxed text-ink-muted">
+                    {claim}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       </main>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/site-footer";
 import { JURISDICTION, OPERATOR, isConfigured } from "@/lib/legal/operator";
+import { Logo } from "@/components/logo";
 
 /**
  * Shell for the legal pages.
@@ -22,7 +23,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
       <header className="border-b border-line">
         <nav className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <span aria-hidden className="block h-4 w-4 rotate-45 border-2 border-signal" />
+            <Logo />
             <span className="font-mono text-sm font-semibold tracking-widest text-ink uppercase">
               Fulcrum
             </span>

@@ -1,4 +1,5 @@
 import { Badge, Panel } from "@/components/ui";
+import { BudgetMeter, RiskBar, ScoreGauge, SeverityBar } from "@/components/viz";
 import { severityBreakdown, worstSeverity } from "@/lib/agent/scoring";
 import { CVE_COVERAGE_NOTE } from "@/lib/agent/cve-dataset";
 import type { Finding, Grade, RemediationPlan, Severity } from "@/lib/agent/types";
@@ -12,14 +13,6 @@ import type { Finding, Grade, RemediationPlan, Severity } from "@/lib/agent/type
  * a banner containing markup is displayed as the literal characters the
  * target sent.
  */
-
-const GRADE_TONE: Record<Grade, string> = {
-  A: "text-signal border-signal/50 bg-signal/10",
-  B: "text-signal border-signal/40 bg-signal/5",
-  C: "text-sev-medium border-sev-medium/50 bg-sev-medium/10",
-  D: "text-sev-high border-sev-high/50 bg-sev-high/10",
-  F: "text-sev-critical border-sev-critical/50 bg-sev-critical/10",
-};
 
 /**
  * Mirrors SEVERITY_FLOOR in lib/agent/scoring.ts, for display only.
@@ -77,10 +70,8 @@ export function Scorecard({
       {/* -- grade banner -------------------------------------------- */}
       <section className="rounded-lg border border-line bg-surface p-6">
         <div className="flex flex-wrap items-center gap-6">
-          <div
-            className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border-2 font-mono text-5xl font-bold ${GRADE_TONE[grade]}`}
-          >
-            {grade}
+          <div className="shrink-0">
+            <ScoreGauge score={score} grade={grade} />
           </div>
 
           <div className="min-w-64 flex-1">
@@ -103,6 +94,19 @@ export function Scorecard({
                 ))}
               {scored.length === 0 && <Badge tone="signal">no findings</Badge>}
             </div>
+
+            {/* A proportion view only. The badges above remain the
+                authoritative counts — see the note in viz.tsx about why
+                small segments are not given a minimum width. */}
+            <SeverityBar
+              className="mt-3 h-1.5 w-full"
+              counts={{
+                critical: counts.CRITICAL,
+                high: counts.HIGH,
+                medium: counts.MEDIUM,
+                low: counts.LOW,
+              }}
+            />
           </div>
         </div>
 
@@ -190,7 +194,12 @@ export function Scorecard({
             <div className="font-mono text-sm text-ink">
               {plan.budgetUsed}/{plan.budgetLimit} pts
             </div>
-            <div className="text-xs text-ink-faint">
+            <BudgetMeter
+              className="mt-1 ml-auto h-1 w-28"
+              used={plan.budgetUsed}
+              limit={plan.budgetLimit}
+            />
+            <div className="mt-1 text-xs text-ink-faint">
               projects to {plan.projectedGrade} ({plan.projectedScore})
             </div>
           </div>
@@ -286,6 +295,7 @@ export function Scorecard({
                     </td>
                     <td className="py-3 pr-3 font-mono text-ink">
                       {finding.riskScore}
+                      <RiskBar className="mt-1 h-1 w-10" risk={finding.riskScore} />
                     </td>
                     <td className="py-3 pr-3">
                       <div className="font-medium text-ink">{finding.title}</div>

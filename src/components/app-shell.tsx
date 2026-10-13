@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
+import { Logo } from "@/components/logo";
 
 /**
  * Chrome for authenticated pages.
@@ -40,7 +41,7 @@ export function AppShell({
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3">
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <span aria-hidden className="block h-4 w-4 rotate-45 border-2 border-signal" />
+              <Logo />
               <span className="font-mono text-sm font-semibold tracking-widest text-ink uppercase">
                 Fulcrum
               </span>

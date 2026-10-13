@@ -141,3 +141,83 @@ export function Alert({
     </div>
   );
 }
+
+/* ---------------------------------------------------------------------------
+ * Busy indicators.
+ *
+ * Buttons in this app are exported as class strings, not components, which
+ * means there is no single place to add a loading state to. Rather than
+ * refactor thirteen call sites into a <Button> component to gain a spinner,
+ * these wrap the *label* instead — the part that already changes.
+ *
+ *     {busy ? "Scanning…" : "Run scan"}
+ *     {busy ? <Busy>Scanning…</Busy> : "Run scan"}
+ *
+ * The `inline-flex items-center gap-2` that buttonClass has carried unused
+ * since it was written does the layout.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * An indeterminate spinner.
+ *
+ * `aria-hidden` because it duplicates the label beside it; under
+ * prefers-reduced-motion the `.spin` class hides it outright, since a
+ * motionless spinner communicates nothing that the word "Scanning…" does
+ * not already say.
+ *
+ * The arc is drawn with stroke-dasharray as an attribute rather than CSS —
+ * style-src has no 'unsafe-inline', so a style attribute would be dropped.
+ */
+export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`spin ${className}`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={2.5} opacity={0.25} />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A button label with a spinner in front of it. */
+export function Busy({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <Spinner />
+      {children}
+    </>
+  );
+}
+
+/**
+ * A progress bar for work of unknown duration.
+ *
+ * Indeterminate on purpose. The server reports no percentage and no stage,
+ * so a bar that filled toward a deadline would be predicting, not
+ * measuring — and this product's own landing page criticises exactly that
+ * kind of invented progress. A sweeping segment says "working, duration
+ * unknown", which is the truth.
+ *
+ * `aria-hidden`: whatever renders this is expected to own a role="status"
+ * region with the real, measured elapsed time in it. That is what gets
+ * announced; this is decoration for the eye only.
+ */
+export function IndeterminateBar({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`sweep-track h-1 w-full rounded-full bg-line ${className}`}
+      aria-hidden="true"
+    >
+      <div className="sweep h-full w-1/4 rounded-full bg-signal" />
+    </div>
+  );
+}

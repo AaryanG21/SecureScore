@@ -3,11 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { ScanProgress } from "@/components/scan-progress";
 
 interface ScannableDomain {
   id: string;
   hostname: string;
+  /**
+   * Verified, but longer ago than the configured TTL. Listed rather than
+   * removed — a domain silently vanishing from the picker is harder to
+   * understand than one that says why it cannot be scanned.
+   */
+  stale: boolean;
 }
 
 /**
@@ -23,6 +30,8 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
   const [budget, setBudget] = useState(15);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // When the current run began, for the elapsed counter. Null when idle.
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
 
   // The selection is DERIVED, not stored, and that is load-bearing.
   //
@@ -47,6 +56,7 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setStartedAtMs(Date.now());
 
     const result = await apiFetch<{ scanId: string }>("/api/scans", {
       method: "POST",
@@ -54,6 +64,7 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
     });
 
     setBusy(false);
+    setStartedAtMs(null);
 
     if (!result.ok) {
       // Surface the specific field error when the server sent one; the
@@ -88,7 +99,7 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
       title="Run a scan"
       description="Checks HTTP headers, TLS configuration via testssl.sh, and known CVEs for any disclosed versions."
     >
-      <form onSubmit={launch} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={launch} aria-busy={busy} className="flex flex-wrap items-end gap-3">
         <div className="min-w-56 flex-1">
           <Field label="Verified domain">
             <select
@@ -100,6 +111,7 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
               {domains.map((domain) => (
                 <option key={domain.id} value={domain.id}>
                   {domain.hostname}
+                  {domain.stale ? " — needs re-verification" : ""}
                 </option>
               ))}
             </select>
@@ -124,16 +136,18 @@ export function ScanLauncher({ domains }: { domains: ScannableDomain[] }) {
         </div>
 
         <button type="submit" className={buttonClass} disabled={busy}>
-          {busy ? "Scanning…" : "Run scan"}
+          {busy ? <Busy>Scanning…</Busy> : "Run scan"}
         </button>
       </form>
 
-      {busy && (
-        <p className="mt-3 text-xs text-ink-faint">
-          The TLS stage runs testssl.sh against the target and typically takes
-          two to three minutes. Leave this tab open.
+      {!busy && domains.find((d) => d.id === domainId)?.stale && (
+        <p className="mt-3 text-xs text-sev-medium">
+          Ownership of this domain was proven too long ago to still count.
+          Re-run its challenge above; the scan will be refused until you do.
         </p>
       )}
+
+      {busy && startedAtMs !== null && <ScanProgress startedAtMs={startedAtMs} />}
 
       {error && (
         <div className="mt-3">

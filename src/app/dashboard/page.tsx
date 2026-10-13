@@ -11,6 +11,8 @@ import {
   DNS_CHALLENGE_PREFIX,
   HTTP_CHALLENGE_PATH,
 } from "@/lib/domains/verification";
+import { isVerificationStale } from "@/lib/domains/allowlist";
+import { getEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard — Fulcrum" };
@@ -60,10 +62,29 @@ export default async function DashboardPage() {
     (d) => d.verificationStatus === "VERIFIED",
   ).length;
 
+  // Computed here, not in the browser: the TTL is server configuration, and
+  // the client must never be the thing that decides a domain is scannable.
+  // This is presentation only — authorizeScan runs the same check again.
+  const ttlDays = getEnv().DOMAIN_VERIFICATION_TTL_DAYS;
+  const isStale = (verifiedAt: Date | null) =>
+    isVerificationStale(verifiedAt, ttlDays);
+
+  const staleCount = domains.filter(
+    (d) => d.verificationStatus === "VERIFIED" && isStale(d.verifiedAt),
+  ).length;
+
   return (
     <AppShell email={session.email} isAdmin={session.role === "ADMIN"} active="dashboard">
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Domains" value={domains.length} hint={`${verifiedCount} verified`} />
+        <Stat
+          label="Domains"
+          value={domains.length}
+          hint={
+            staleCount > 0
+              ? `${verifiedCount} verified · ${staleCount} need re-verifying`
+              : `${verifiedCount} verified`
+          }
+        />
         <Stat label="Scans run" value={scans.length} hint="last 10 shown" />
         <Stat
           label="Latest grade"
@@ -76,6 +97,7 @@ export default async function DashboardPage() {
         <DomainManager
           initialDomains={domains.map((d) => ({
             ...d,
+            stale: d.verificationStatus === "VERIFIED" && isStale(d.verifiedAt),
             verifiedAt: d.verifiedAt?.toISOString() ?? null,
             createdAt: d.createdAt.toISOString(),
             challenge:
@@ -98,7 +120,11 @@ export default async function DashboardPage() {
         <ScanLauncher
           domains={domains
             .filter((d) => d.verificationStatus === "VERIFIED")
-            .map((d) => ({ id: d.id, hostname: d.hostname }))}
+            .map((d) => ({
+              id: d.id,
+              hostname: d.hostname,
+              stale: isStale(d.verifiedAt),
+            }))}
         />
       </div>
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
 
 /**
  * Export and deletion — the two data rights that need a UI.
@@ -167,7 +167,7 @@ export function DataControls() {
                 disabled={busy || confirmWord.trim().toLowerCase() !== "delete"}
                 className="rounded-md bg-sev-critical px-4 py-2 text-sm font-semibold text-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy ? "Deleting…" : "Delete permanently"}
+                {busy ? <Busy>Deleting…</Busy> : "Delete permanently"}
               </button>
               <button
                 type="button"

@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { Panel } from "@/components/ui";
 import { Scorecard } from "@/components/scorecard";
+import { ScanStatusWatcher } from "./scan-status-watcher";
 import type { Finding, Grade, RemediationPlan } from "@/lib/agent/types";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export default async function ScanPage({
       testsslVersion: true,
       refusalReason: true,
       errorMessage: true,
+      startedAt: true,
       completedAt: true,
       createdAt: true,
     },
@@ -67,6 +69,14 @@ export default async function ScanPage({
           )}
           {scan.errorMessage && (
             <p className="mt-2 text-sm text-sev-critical">{scan.errorMessage}</p>
+          )}
+          {/* Only RUNNING and QUEUED can still change. Polling a FAILED or
+              REFUSED scan would never terminate on a status transition. */}
+          {(scan.status === "RUNNING" || scan.status === "QUEUED") && (
+            <ScanStatusWatcher
+              scanId={scan.id}
+              startedAtMs={(scan.startedAt ?? scan.createdAt).getTime()}
+            />
           )}
           <Link
             href="/dashboard"

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, buttonClass, inputClass } from "@/components/ui";
 
 export function ChangePasswordForm() {
   const router = useRouter();
@@ -69,7 +69,7 @@ export function ChangePasswordForm() {
       </Field>
 
       <button type="submit" className={buttonClass} disabled={busy}>
-        {busy ? "Updating…" : "Change password"}
+        {busy ? <Busy>Updating…</Busy> : "Change password"}
       </button>
     </form>
   );

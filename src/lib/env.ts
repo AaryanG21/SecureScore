@@ -60,6 +60,24 @@ const envSchema = z.object({
   MAX_FAILED_LOGINS: z.coerce.number().int().min(3).max(20).default(5),
   LOCKOUT_BASE_SECONDS: z.coerce.number().int().min(30).default(900),
 
+  // How long a proven domain ownership keeps authorising TLS scans.
+  //
+  // Ownership is a fact about the present, not a permanent property. A
+  // registration lapses, a domain is sold, and whoever verified it last
+  // year would otherwise keep the right to open hundreds of connections
+  // against a host that is now someone else's. Re-running the challenge
+  // costs the user one DNS record or one file.
+  //
+  // There is no sentinel for "never expire": an operator who truly wants
+  // that sets a century and leaves the reason in their own config, rather
+  // than it happening by accident because a value was left at zero.
+  DOMAIN_VERIFICATION_TTL_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(36_500)
+    .default(90),
+
   // Path to the pinned testssl.sh checkout (see README).
   TESTSSL_PATH: z.string().default("./vendor/testssl.sh/testssl.sh"),
   TESTSSL_TIMEOUT_MS: z.coerce.number().int().min(10_000).max(1_800_000).default(300_000),

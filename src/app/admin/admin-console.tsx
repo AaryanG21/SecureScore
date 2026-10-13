@@ -3,15 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import {
-  Alert,
-  Badge,
-  Field,
-  Panel,
-  buttonClass,
-  buttonGhostClass,
-  inputClass,
-} from "@/components/ui";
+import { Alert, Badge, Busy, Field, Panel, buttonClass, buttonGhostClass, inputClass } from "@/components/ui";
 
 interface AdminUser {
   id: string;
@@ -169,7 +161,7 @@ export function AdminConsole({
 
             <div className="flex gap-3">
               <button type="submit" className={buttonClass} disabled={busy}>
-                {busy ? "Confirming…" : "Confirm"}
+                {busy ? <Busy>Confirming…</Busy> : "Confirm"}
               </button>
               <button type="button" className={buttonGhostClass} onClick={reset}>
                 Cancel

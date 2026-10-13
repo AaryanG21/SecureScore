@@ -3,15 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import {
-  Alert,
-  Badge,
-  Field,
-  Panel,
-  buttonClass,
-  buttonGhostClass,
-  inputClass,
-} from "@/components/ui";
+import { Alert, Badge, Busy, Field, Panel, buttonClass, buttonGhostClass, inputClass } from "@/components/ui";
 
 interface Challenge {
   type: "DNS_TXT" | "HTTP_WELL_KNOWN";
@@ -25,6 +17,11 @@ export interface DomainRow {
   verificationStatus: "PENDING" | "VERIFIED" | "FAILED" | "REVOKED";
   verificationMethod: "DNS_TXT" | "HTTP_WELL_KNOWN";
   verifiedAt: string | null;
+  /**
+   * Computed on the server from DOMAIN_VERIFICATION_TTL_DAYS. Shown here
+   * so the user is not surprised at scan time; `authorizeScan` decides.
+   */
+  stale: boolean;
   createdAt: string;
   challenge: Challenge;
 }
@@ -141,7 +138,7 @@ export function DomainManager({ initialDomains }: { initialDomains: DomainRow[] 
         </div>
 
         <button type="submit" className={buttonClass} disabled={adding}>
-          {adding ? "Adding…" : "Add domain"}
+          {adding ? <Busy>Adding…</Busy> : "Add domain"}
         </button>
       </form>
 
@@ -172,18 +169,24 @@ export function DomainManager({ initialDomains }: { initialDomains: DomainRow[] 
                 <Badge tone={STATUS_TONE[domain.verificationStatus]}>
                   {domain.verificationStatus.toLowerCase()}
                 </Badge>
+                {domain.verificationStatus === "VERIFIED" && domain.stale && (
+                  <Badge tone="medium">re-verify</Badge>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
-                {domain.verificationStatus !== "VERIFIED" &&
-                  domain.verificationStatus !== "REVOKED" && (
+                {/* Stale is the exception to hiding this on VERIFIED: it is
+                    the only route back to a scannable domain. */}
+                {((domain.verificationStatus !== "VERIFIED" &&
+                  domain.verificationStatus !== "REVOKED") ||
+                  (domain.verificationStatus === "VERIFIED" && domain.stale)) && (
                     <button
                       type="button"
                       className={buttonGhostClass}
                       disabled={busyId === domain.id}
                       onClick={() => verify(domain.id)}
                     >
-                      {busyId === domain.id ? "Checking…" : "Verify"}
+                      {busyId === domain.id ? <Busy>Checking…</Busy> : "Verify"}
                     </button>
                   )}
                 <button
@@ -197,7 +200,9 @@ export function DomainManager({ initialDomains }: { initialDomains: DomainRow[] 
               </div>
             </div>
 
-            {domain.verificationStatus !== "VERIFIED" && (
+            {/* Shown for a stale domain too: a "Verify" button with no
+                visible token is a dead end if the record was removed. */}
+            {(domain.verificationStatus !== "VERIFIED" || domain.stale) && (
               <dl className="mt-3 space-y-1.5 text-xs">
                 <div className="flex flex-wrap gap-2">
                   <dt className="text-ink-faint">

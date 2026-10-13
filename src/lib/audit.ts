@@ -88,6 +88,10 @@ export const AUDIT_ACTIONS = [
   "PUBLIC_SCAN_REFUSED",
   "SCAN_REFUSED_UNVERIFIED_DOMAIN",
   "SCAN_REFUSED_NOT_OWNER",
+  // Distinct from UNVERIFIED on purpose: the domain *was* verified, and
+  // conflating the two would make the audit trail say something untrue
+  // about what the user had and had not done.
+  "SCAN_REFUSED_STALE_VERIFICATION",
   "SCAN_COMPLETED",
   "SCAN_FAILED",
   "SCAN_INJECTION_ATTEMPT_IGNORED",

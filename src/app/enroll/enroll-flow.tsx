@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
 
 /**
  * TOTP enrollment.
@@ -216,7 +216,7 @@ export function EnrollFlow() {
             </Field>
 
             <button type="submit" className={`${buttonClass} w-full`} disabled={busy}>
-              {busy ? "Verifying…" : "Confirm and enable"}
+              {busy ? <Busy>Verifying…</Busy> : "Confirm and enable"}
             </button>
           </form>
         </div>
@@ -233,7 +233,7 @@ export function EnrollFlow() {
             onClick={beginSetup}
             disabled={busy}
           >
-            {busy ? "Preparing…" : "Generate my authenticator secret"}
+            {busy ? <Busy>Preparing…</Busy> : "Generate my authenticator secret"}
           </button>
         </div>
       )}

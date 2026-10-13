@@ -33,15 +33,15 @@
   --color-ink-muted: #9aa7b4;
   --color-ink-faint: #6b7986;
 
-  /* Accent: a cold signal-green, the colour of a passing check. */
-  --color-signal: #3ddc97;
-  --color-signal-dim: #1d8f63;
+  /* Accent: marine blue, the colour of a passing check. */
+  --color-signal: #3d9fd6;
+  --color-signal-dim: #1a5f8a;
 
   /* Severity ramp, used by grades and findings. */
-  --color-sev-critical: #ff4d5e;
+  --color-sev-critical: #ff3b4e;
   --color-sev-high: #ff8a3d;
-  --color-sev-medium: #f5c451;
-  --color-sev-low: #58a6ff;
+  --color-sev-medium: #f2d675;
+  --color-sev-low: #9db8d4;
   --color-sev-info: #8b98a5;
 }
 
@@ -105,6 +105,97 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion.
+ *
+ * Three keyframe sets, each tied to a specific state the user needs to know
+ * about: work is in progress, work is still in progress, and how long it has
+ * been. Nothing here moves for decoration.
+ *
+ * Two rules these must obey.
+ *
+ * 1. No animation may start from a state that hides content. If the CSS
+ *    fails to load or the animation never runs, the element must already be
+ *    in its correct, visible, readable state. That is why none of these
+ *    touches opacity down to 0, and why none uses a fill-mode that would
+ *    hold an invisible first frame.
+ *
+ * 2. Every one of them needs an explicit resting state below. The global
+ *    reduced-motion block above zeroes animation-DURATION but not
+ *    animation-NAME, so an animation whose last keyframe differs from its
+ *    first does not stop — it jumps straight to the end. For the sweep that
+ *    is actively wrong: the segment parks off the end of its track and the
+ *    user is left looking at an empty box where the busy indicator should
+ *    be. Zeroed duration is not the same as "off".
+ * ------------------------------------------------------------------------ */
+
+@keyframes fulcrum-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* The segment travels; its width never changes. Animating width would
+   relayout on every frame, and the value would have to come from CSS, which
+   the style-src CSP does not allow us to set per-element anyway. */
+@keyframes fulcrum-sweep {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 400% 0;
+  }
+}
+
+@keyframes fulcrum-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.spin {
+  animation: fulcrum-spin 0.8s linear infinite;
+}
+
+.sweep-track {
+  position: relative;
+  overflow: hidden;
+}
+
+.sweep {
+  animation: fulcrum-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.pulse {
+  animation: fulcrum-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The spinner carries no information the adjacent label does not already
+     carry, so it simply goes away rather than sitting there frozen. */
+  .spin {
+    display: none !important;
+  }
+
+  /* A filled, dimmed track still reads as "working". An empty one reads as
+     "nothing is happening", which would be a lie. */
+  .sweep {
+    animation: none !important;
+    translate: 0 0 !important;
+    width: 100% !important;
+    opacity: 0.35;
+  }
+
+  .pulse {
+    animation: none !important;
+    opacity: 1;
   }
 }
 

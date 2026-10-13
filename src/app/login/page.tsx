@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { LoginFlow } from "@/app/login/login-flow";
+import { Logo } from "@/components/logo";
 
 export const metadata = { title: "Sign in — Fulcrum" };
 
@@ -23,7 +24,7 @@ export default function LoginPage() {
       <header className="border-b border-line">
         <div className="mx-auto flex max-w-6xl items-center px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <span aria-hidden className="block h-4 w-4 rotate-45 border-2 border-signal" />
+            <Logo />
             <span className="font-mono text-sm font-semibold tracking-widest text-ink uppercase">
               Fulcrum
             </span>

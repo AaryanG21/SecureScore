@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
 
 const MIN_LENGTH = 12;
 
@@ -136,7 +136,7 @@ export function RegisterForm() {
           className={`${buttonClass} w-full`}
           disabled={busy || !acceptedTerms}
         >
-          {busy ? "Creating…" : "Create account"}
+          {busy ? <Busy>Creating…</Busy> : "Create account"}
         </button>
 
         <p className="text-xs text-ink-faint">

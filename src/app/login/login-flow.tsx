@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
 
 /**
  * Two-step sign-in.
@@ -129,7 +129,7 @@ export function LoginFlow() {
           )}
 
           <button type="submit" className={`${buttonClass} w-full`} disabled={busy}>
-            {busy ? "Verifying…" : "Verify"}
+            {busy ? <Busy>Verifying…</Busy> : "Verify"}
           </button>
 
           <button
@@ -177,7 +177,7 @@ export function LoginFlow() {
         </Field>
 
         <button type="submit" className={`${buttonClass} w-full`} disabled={busy}>
-          {busy ? "Checking…" : "Continue"}
+          {busy ? <Busy>Checking…</Busy> : "Continue"}
         </button>
 
         <p className="text-center text-xs text-ink-faint">

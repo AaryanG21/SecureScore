@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/client/api";
+import { Busy } from "@/components/ui";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -20,9 +21,9 @@ export function SignOutButton() {
         router.push("/login");
         router.refresh();
       }}
-      className="rounded-md border border-line-bright px-2.5 py-1 text-xs text-ink-muted transition-colors hover:border-sev-critical/50 hover:text-ink disabled:opacity-50"
+      className="inline-flex items-center gap-1.5 rounded-md border border-line-bright px-2.5 py-1 text-xs text-ink-muted transition-colors hover:border-sev-critical/50 hover:text-ink disabled:opacity-50"
     >
-      {busy ? "Signing out…" : "Sign out"}
+      {busy ? <Busy>Signing out…</Busy> : "Sign out"}
     </button>
   );
 }

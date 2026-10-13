@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client/api";
-import { Alert, Field, Panel, buttonClass, inputClass } from "@/components/ui";
+import { Alert, Busy, Field, Panel, buttonClass, inputClass } from "@/components/ui";
 
 /**
  * Headers-only check of any public host.
@@ -64,7 +64,7 @@ export function PublicCheck() {
           </Field>
         </div>
         <button type="submit" className={buttonClass} disabled={busy || !hostname}>
-          {busy ? "Checking…" : "Check headers"}
+          {busy ? <Busy>Checking…</Busy> : "Check headers"}
         </button>
       </form>
 
